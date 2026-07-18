@@ -1,0 +1,33 @@
+import {
+  BarChart3,
+  Bell,
+  Boxes,
+  ClipboardList,
+  CreditCard,
+  LayoutDashboard,
+  Package,
+  ReceiptText,
+  Settings,
+  ShoppingBasket,
+  Tags,
+  Truck,
+  UserCog,
+  Users,
+} from 'lucide-react';
+
+export const adminNavigation = [
+  { to: '/admin', label: 'Resumen', icon: LayoutDashboard, end: true },
+  { to: '/admin/pedidos', label: 'Pedidos', icon: ClipboardList },
+  { to: '/admin/clientes', label: 'Clientes', icon: Users },
+  { to: '/admin/productos', label: 'Productos', icon: Package },
+  { to: '/admin/precios', label: 'Listas y precios', icon: Tags },
+  { to: '/admin/inventario', label: 'Inventario', icon: Boxes },
+  { to: '/admin/compras', label: 'Compras', icon: ShoppingBasket },
+  { to: '/admin/proveedores', label: 'Proveedores', icon: Truck },
+  { to: '/admin/pagos', label: 'Pagos y cartera', icon: CreditCard },
+  { to: '/admin/gastos', label: 'Gastos', icon: ReceiptText },
+  { to: '/admin/reportes', label: 'Reportes', icon: BarChart3 },
+  { to: '/admin/usuarios', label: 'Usuarios', icon: UserCog },
+  { to: '/admin/notificaciones', label: 'Notificaciones', icon: Bell },
+  { to: '/admin/configuracion', label: 'Configuración', icon: Settings },
+];
