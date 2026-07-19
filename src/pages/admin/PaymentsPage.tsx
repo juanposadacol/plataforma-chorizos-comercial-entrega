@@ -6,6 +6,7 @@ import type { AdminOrder, Payment } from '../../features/admin/types';
 import { orderTotal } from '../../features/admin/types';
 import { invokeAdminRpc } from '../../features/admin/adminService';
 import { useAdminData } from '../../features/admin/useAdminData';
+import { usePaymentMethods } from '../../features/admin/usePaymentMethods';
 import {
   firstText,
   formatAdminDate,
@@ -60,13 +61,14 @@ export function PaymentsPage() {
     { orderBy: 'due_date', ascending: true, limit: 1000 },
     true,
   );
+  const { methods: paymentMethods } = usePaymentMethods();
   const [tab, setTab] = useState<PaymentTab>('payments');
   const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState({
     order_id: '',
     amount: '',
-    method: 'transfer',
+    method: '',   // stores payment_methods.id (UUID)
     reference: '',
     notes: '',
   });
@@ -106,6 +108,8 @@ export function PaymentsPage() {
     [orderById, receivablesState.data, search],
   );
   const selectedOrder = orderById.get(form.order_id);
+  // form.method stores the UUID; fall back to the first loaded method when empty.
+  const resolvedMethodId = form.method || (paymentMethods[0]?.id ?? '');
   const orderPayments = paymentsState.data
     .filter(
       (payment) =>
@@ -132,7 +136,7 @@ export function PaymentsPage() {
   }, [form.order_id, form.amount, orderBalance]);
 
   const openCreate = () => {
-    setForm({ order_id: '', amount: '', method: 'transfer', reference: '', notes: '' });
+    setForm({ order_id: '', amount: '', method: paymentMethods[0]?.id ?? '', reference: '', notes: '' });
     setError(null);
     setModalOpen(true);
   };
@@ -144,7 +148,7 @@ export function PaymentsPage() {
       await invokeAdminRpc('register_payment', {
         p_order_id: form.order_id,
         p_amount: Number(form.amount),
-        p_method: form.method,
+        p_payment_method_id: resolvedMethodId,
         p_reference: form.reference || null,
         p_notes: form.notes || null,
       });
@@ -442,17 +446,19 @@ export function PaymentsPage() {
             <select
               required
               className={inputClass}
-              value={form.method}
+              value={resolvedMethodId}
               onChange={(event) =>
                 setForm((current) => ({ ...current, method: event.target.value }))
               }
             >
-              <option value="cash">Efectivo</option>
-              <option value="transfer">Transferencia</option>
-              <option value="card">Tarjeta</option>
-              <option value="cash_on_delivery">Contraentrega</option>
-              <option value="credit">Crédito</option>
-              <option value="other">Otro</option>
+              {paymentMethods.length === 0 && (
+                <option value="">Cargando métodos…</option>
+              )}
+              {paymentMethods.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
             </select>
           </label>
           <label>

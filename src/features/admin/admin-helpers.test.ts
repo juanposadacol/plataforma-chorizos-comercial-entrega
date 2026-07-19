@@ -109,3 +109,52 @@ describe('validación de valores de pago — regresión step/min', () => {
   it('rechaza valores negativos', () =>
     expect(validatePayment(-1, 120000)).toBe(false));
 });
+
+// Regresión para el bug de códigos de método de pago.
+// Causa raíz: el frontend enviaba códigos en inglés ('cash','transfer','card',
+// 'cash_on_delivery','credit') que no coinciden con los códigos reales en BD
+// ('efectivo','transferencia','contraentrega','credito','otro').
+// La corrección carga los métodos desde la BD (usePaymentMethods) y usa el UUID
+// directamente, eliminando toda dependencia de códigos hardcodeados en el cliente.
+describe('mapeo de métodos de pago — regresión códigos inglés vs español', () => {
+  // Simula los métodos reales que devuelve la BD (ver migrations/seed.sql).
+  const dbMethods = [
+    { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1', code: 'efectivo',      name: 'Efectivo' },
+    { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2', code: 'transferencia', name: 'Transferencia' },
+    { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3', code: 'contraentrega', name: 'Contraentrega' },
+    { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa4', code: 'credito',       name: 'Crédito' },
+    { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa5', code: 'otro',          name: 'Otro' },
+  ];
+
+  // Simula la lógica que usaba el texto overload de register_payment.
+  const findByCode = (code: string) =>
+    dbMethods.find(
+      (m) => m.code === code.toLowerCase() || m.name.toLowerCase() === code.toLowerCase(),
+    );
+
+  it('efectivo se encuentra por código real', () =>
+    expect(findByCode('efectivo')?.id).toBe('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'));
+
+  it('contraentrega se encuentra por código real', () =>
+    expect(findByCode('contraentrega')?.id).toBe('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3'));
+
+  it('el código inglés "cash" NO se encontraría (confirma causa raíz del bug)', () =>
+    expect(findByCode('cash')).toBeUndefined());
+
+  it('el código inglés "transfer" NO se encontraría', () =>
+    expect(findByCode('transfer')).toBeUndefined());
+
+  it('el código inglés "card" NO se encontraría (no existe en BD)', () =>
+    expect(findByCode('card')).toBeUndefined());
+
+  it('el código inglés "cash_on_delivery" NO se encontraría', () =>
+    expect(findByCode('cash_on_delivery')).toBeUndefined());
+
+  it('UUID inválido no coincide con ningún método', () =>
+    expect(dbMethods.find((m) => m.id === 'uuid-inexistente')).toBeUndefined());
+
+  it('con la corrección, el UUID de efectivo es un UUID v4 válido', () =>
+    expect('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1').toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    ));
+});

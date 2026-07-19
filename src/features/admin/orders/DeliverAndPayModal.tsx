@@ -5,6 +5,7 @@ import { orderTotal } from '../types';
 import { firstText, formatMoney, toNumber } from '../utils';
 import { Button, inputClass, labelClass, Modal } from '../components/AdminUi';
 import { invokeAdminRpc } from '../adminService';
+import { usePaymentMethods } from '../usePaymentMethods';
 
 interface Props {
   open: boolean;
@@ -21,7 +22,10 @@ export function DeliverAndPayModal({ open, order, payments, onClose, onSuccess }
     .reduce((sum, p) => sum + toNumber(p.amount), 0);
   const balance = Math.max(0, totalAmount - approvedPaid);
 
-  const [method, setMethod] = useState('transfer');
+  const { methods: paymentMethods } = usePaymentMethods();
+  // Stores the UUID of the selected method; falls back to first available when empty.
+  const [methodId, setMethodId] = useState('');
+  const resolvedMethodId = methodId || (paymentMethods[0]?.id ?? '');
   const [amount, setAmount] = useState(String(balance > 0 ? Math.round(balance) : 0));
   const [reference, setReference] = useState('');
   const [saving, setSaving] = useState(false);
@@ -48,10 +52,9 @@ export function DeliverAndPayModal({ open, order, payments, onClose, onSuccess }
     setSaving(true);
     setError(null);
     try {
-      const methodId = await resolveMethodId(method);
       await invokeAdminRpc('deliver_and_pay_order', {
         p_order_id: order.id,
-        p_payment_method_id: methodId,
+        p_payment_method_id: resolvedMethodId,
         p_amount: payAmount > 0 ? payAmount : null,
         p_reference: reference || null,
         p_notes: 'Entregado y pagado desde el panel de administración',
@@ -110,15 +113,17 @@ export function DeliverAndPayModal({ open, order, payments, onClose, onSuccess }
               <span className={labelClass}>Método de pago</span>
               <select
                 className={inputClass}
-                value={method}
-                onChange={(event) => setMethod(event.target.value)}
+                value={resolvedMethodId}
+                onChange={(event) => setMethodId(event.target.value)}
               >
-                <option value="cash">Efectivo</option>
-                <option value="transfer">Transferencia</option>
-                <option value="card">Tarjeta</option>
-                <option value="cash_on_delivery">Contraentrega</option>
-                <option value="credit">Crédito</option>
-                <option value="other">Otro</option>
+                {paymentMethods.length === 0 && (
+                  <option value="">Cargando métodos…</option>
+                )}
+                {paymentMethods.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
               </select>
             </label>
             <label>
@@ -178,22 +183,3 @@ export function DeliverAndPayModal({ open, order, payments, onClose, onSuccess }
   );
 }
 
-// Busca el ID del método de pago por código. Como alternativa, los métodos de pago
-// se podrían cargar desde la BD, pero para esta pantalla usamos el overload de
-// register_payment que acepta el code como texto (ya existe en la BD).
-// La función deliver_and_pay_order necesita el UUID, por lo que aquí resolvemos
-// usando el código del método que la BD tiene predefinido.
-async function resolveMethodId(code: string): Promise<string> {
-  // Importamos el cliente de Supabase aquí para evitar dependencias circulares.
-  const { supabase } = await import('../../../lib/supabase');
-  if (!supabase) throw new Error('Supabase no está configurado');
-  const { data, error } = await supabase
-    .from('payment_methods')
-    .select('id')
-    .eq('code', code)
-    .eq('is_active', true)
-    .is('deleted_at', null)
-    .maybeSingle();
-  if (error || !data) throw new Error('Método de pago no encontrado');
-  return (data as { id: string }).id;
-}
