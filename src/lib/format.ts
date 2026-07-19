@@ -23,6 +23,31 @@ export const formatDateTime = (value: string | Date): string =>
     timeZone: 'America/Bogota',
   }).format(new Date(value));
 
+const SQL_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/**
+ * True for a bare "YYYY-MM-DD" string — a PostgreSQL DATE value with no time or
+ * timezone component (sale_date, due_date, expense_date, purchase_date,
+ * requested_delivery_date, valid_from/valid_until...). PostgREST always
+ * serializes TIMESTAMPTZ with a full time + offset, so this shape check alone
+ * is enough to tell the two apart — no need to know the column name.
+ */
+export const isBareSqlDate = (value: string): boolean => SQL_DATE_PATTERN.test(value);
+
+/**
+ * Formats a PostgreSQL DATE value as DD/MM/YYYY without ever constructing a JS
+ * Date object. `new Date("2026-07-18")` parses ISO date-only strings as UTC
+ * midnight; rendering that instant in America/Bogota (UTC-5) rolls the date back
+ * to the previous day. A DATE column has no timezone to convert — it must be
+ * shown exactly as stored.
+ */
+export const formatSqlDate = (value: string): string => {
+  const match = SQL_DATE_PATTERN.exec(value);
+  if (!match) return value;
+  const [, year, month, day] = match;
+  return `${day}/${month}/${year}`;
+};
+
 export const normalizeColombianPhone = (value: string): string => {
   const digits = value.replace(/\D/g, '');
   if (digits.length === 10) return `57${digits}`;

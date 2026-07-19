@@ -4,13 +4,15 @@ import {
   bogotaMondayIndex,
   bogotaStartOfDay,
   formatMoney,
+  formatSqlDate,
   getBogotaDateParts,
   getBogotaDateString,
+  isBareSqlDate,
   lastDayOfBogotaMonth,
 } from '../../lib/format';
 import type { DateRange, OrderStatus, PaymentStatus } from './types';
 
-export { formatMoney, getBogotaDateString };
+export { formatMoney, formatSqlDate, getBogotaDateString, isBareSqlDate };
 
 export const toNumber = (value: unknown): number => {
   const parsed = Number(value ?? 0);
@@ -28,6 +30,12 @@ export const firstText = (record: Record<string, unknown>, ...keys: string[]): s
 
 export const formatAdminDate = (value: unknown, includeTime = false): string => {
   if (!value || typeof value !== 'string') return '—';
+  // A bare "YYYY-MM-DD" string is a PostgreSQL DATE with no time or timezone
+  // component (due_date, expense_date, purchase_date, requested_delivery_date,
+  // valid_from/valid_until, sale_date...). `new Date("2026-07-18")` parses that as
+  // UTC midnight, and converting it to America/Bogota (UTC-5) below would roll the
+  // calendar date back to the previous day. Render it exactly as stored instead.
+  if (isBareSqlDate(value)) return formatSqlDate(value);
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '—';
   return new Intl.DateTimeFormat('es-CO', {

@@ -6,7 +6,7 @@ import {
   orderSubtotal,
   orderTotal,
 } from './types';
-import { percentChange, percentage, sumStatusCounts } from './utils';
+import { formatAdminDate, isBareSqlDate, percentChange, percentage, sumStatusCounts } from './utils';
 
 // Helpers de resolución de columnas: la BD usa nombres snake_case distintos
 // al código anterior (total_amount ≠ total, subtotal_amount ≠ subtotal, etc.).
@@ -204,4 +204,49 @@ describe('ticket promedio — fórmula ventas netas / pedidos entregados', () =>
 
   it('no lanza error ni da NaN cuando no hay pedidos entregados', () =>
     expect(averageTicket(0, 0)).toBe(0));
+});
+
+// Regresión para el bug de "Ventas por día" mostrando la venta un día antes: la
+// tabla/gráfica/exportaciones de reportes deciden si un valor es una fecha SQL
+// bare (DD/MM/YYYY, sin conversión de zona horaria) o un TIMESTAMPTZ (convertido a
+// America/Bogota) mirando la FORMA del valor recibido, no el nombre de la columna
+// — PostgREST siempre serializa TIMESTAMPTZ con hora y offset completos, así que
+// "YYYY-MM-DD" a secas identifica sin ambigüedad una columna DATE.
+describe('isBareSqlDate — distingue valores DATE de valores TIMESTAMPTZ por su forma', () => {
+  it('sale_date (report_sales_by_day) tiene forma de DATE', () =>
+    expect(isBareSqlDate('2026-07-18')).toBe(true));
+
+  it('valores de due_date/expense_date/purchase_date/requested_delivery_date son DATE', () => {
+    expect(isBareSqlDate('2026-08-05')).toBe(true);
+    expect(isBareSqlDate('2026-01-31')).toBe(true);
+  });
+
+  it('un TIMESTAMPTZ completo (created_at/delivered_at/paid_at) no es una fecha bare', () => {
+    expect(isBareSqlDate('2026-07-18T23:33:32.462341+00:00')).toBe(false);
+    expect(isBareSqlDate('2026-07-18 23:33:32.462341+00')).toBe(false);
+  });
+
+  it('cadenas que no son fechas no coinciden', () => {
+    expect(isBareSqlDate('120000')).toBe(false);
+    expect(isBareSqlDate('no-es-una-fecha')).toBe(false);
+  });
+});
+
+describe('formatAdminDate — no desplaza columnas DATE al convertir a Bogotá', () => {
+  it('una columna DATE bare (sale_date/due_date/...) se muestra sin conversión de zona horaria', () =>
+    expect(formatAdminDate('2026-07-18')).toBe('18/07/2026'));
+
+  it('un TIMESTAMPTZ completo sí se convierte a America/Bogota', () => {
+    // 2026-07-18T23:33:32Z = 2026-07-18 18:33 en Bogotá (mismo día calendario aquí,
+    // a diferencia del caso DATE-only que un new Date() ingenuo sí desplazaría).
+    const formatted = formatAdminDate('2026-07-18T23:33:32.462341+00:00', true);
+    expect(formatted).toContain('18');
+    expect(formatted).not.toBe('—');
+  });
+
+  it('valor vacío o inválido no lanza error', () => {
+    expect(formatAdminDate(null)).toBe('—');
+    expect(formatAdminDate(undefined)).toBe('—');
+    expect(formatAdminDate('')).toBe('—');
+  });
 });

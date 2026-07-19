@@ -7,7 +7,9 @@ import { fetchRecords, invokeAdminRpc } from '../../features/admin/adminService'
 import {
   formatAdminDate,
   formatMoney,
+  formatSqlDate,
   getBogotaDateString,
+  isBareSqlDate,
   toNumber,
 } from '../../features/admin/utils';
 import { formatBogotaDateParts, getBogotaDateParts } from '../../lib/format';
@@ -230,10 +232,11 @@ export function ReportsPage() {
   );
   const chartRows = useMemo(
     () =>
-      rows.slice(0, 12).map((row) => ({
-        name: String(row[nameKey ?? ''] ?? '—').slice(0, 24),
-        value: toNumber(row[numericKey ?? '']),
-      })),
+      rows.slice(0, 12).map((row) => {
+        const raw = row[nameKey ?? ''];
+        const label = typeof raw === 'string' && isBareSqlDate(raw) ? formatSqlDate(raw) : raw;
+        return { name: String(label ?? '—').slice(0, 24), value: toNumber(row[numericKey ?? '']) };
+      }),
     [nameKey, numericKey, rows],
   );
   const filename = `reporte-${reportId}-${from}-${to}`;
@@ -244,11 +247,27 @@ export function ReportsPage() {
       /(price|cost|total|amount|sales|revenue|profit|balance|paid|value)/i.test(key)
     )
       return formatMoney(value);
-    if (typeof value === 'string' && /(date|created_at|updated_at|due_date)/i.test(key))
+    if (typeof value === 'string' && isBareSqlDate(value)) return formatSqlDate(value);
+    if (typeof value === 'string' && /(date|created_at|updated_at)/i.test(key))
       return formatAdminDate(value, key.includes('_at'));
     if (typeof value === 'boolean') return value ? 'Sí' : 'No';
     return String(value).replaceAll('_', ' ');
   };
+  // Exports get the same DD/MM/YYYY treatment for PostgreSQL DATE values as the
+  // on-screen table, but leave everything else (numbers, TIMESTAMPTZ columns) as
+  // the raw value the report returned — exports are meant to stay analyzable.
+  const exportRows = useMemo(
+    () =>
+      rows.map((row) =>
+        Object.fromEntries(
+          Object.entries(row).map(([key, value]) => [
+            key,
+            typeof value === 'string' && isBareSqlDate(value) ? formatSqlDate(value) : value,
+          ]),
+        ),
+      ) as ExportRow[],
+    [rows],
+  );
 
   return (
     <>
@@ -320,7 +339,7 @@ export function ReportsPage() {
               <Button
                 variant="secondary"
                 disabled={!rows.length}
-                onClick={() => exportCsv(filename, rows)}
+                onClick={() => exportCsv(filename, exportRows)}
               >
                 <Download className="h-4 w-4" />
                 CSV
@@ -328,7 +347,7 @@ export function ReportsPage() {
               <Button
                 variant="secondary"
                 disabled={!rows.length}
-                onClick={() => void exportExcel(filename, rows)}
+                onClick={() => void exportExcel(filename, exportRows)}
               >
                 <FileSpreadsheet className="h-4 w-4" />
                 Excel
@@ -336,7 +355,7 @@ export function ReportsPage() {
               <Button
                 variant="secondary"
                 disabled={!rows.length}
-                onClick={() => exportPdf(filename, selected.label, rows)}
+                onClick={() => exportPdf(filename, selected.label, exportRows)}
               >
                 <FileText className="h-4 w-4" />
                 PDF
