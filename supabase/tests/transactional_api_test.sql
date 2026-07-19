@@ -133,10 +133,37 @@ select set_config('request.jwt.claims','{"role":"authenticated","sub":"99999999-
 select is((select count(*) from public.customers),0::bigint,'RLS oculta clientes ajenos a usuario sin rol');
 reset role;
 
+-- Fixture for the "ghost" identity used only in the RLS assertion above: it now
+-- exists in auth.users (satisfying audit_logs_actor_user_id_fkey if a future
+-- change ever makes that SELECT touch an audited table) but deliberately has no
+-- public.profiles/public.user_roles row, since the RLS test above depends on
+-- exactly that absence (has_any_role()/is_admin() resolve via profiles/user_roles,
+-- not auth.users, so this insert cannot change that test's outcome).
+insert into auth.users(id) values ('99999999-9999-4999-8999-999999999998')
+on conflict (id) do nothing;
+
+-- Root cause of the pgTAP failure fixed here: `request.jwt.claims` is set with
+-- is_local=true, so the "sub" above stays the simulated auth.uid() for every
+-- statement in the rest of this transaction — `reset role` only resets the
+-- Postgres role, not this GUC. Every table below is on write_audit_log()'s
+-- audited-table list (see the `create trigger ..._audit` loop in
+-- 202607170001_core_schema.sql), and that trigger unconditionally stamps
+-- audit_logs.actor_user_id = auth.uid(), which has a real FK to auth.users(id).
+-- Without this reset, the very next audited insert (public.user_roles below)
+-- would try to log an actor that was never a real user, and abort the whole
+-- suite on a foreign key violation instead of exercising the remaining
+-- assertions. service_role has no "sub" claim, so auth.uid() reliably becomes
+-- NULL here (allowed by the nullable FK) instead of requiring one more
+-- throwaway auth.users row.
+select set_config('request.jwt.claims','{"role":"service_role"}',true);
+
 -- ---------------------------------------------------------------------------
 -- Regresión H-05 / H-13 (AUDITORIA_PREPRODUCCION_NETLIFY.md). Identidades de
 -- prueba contabilidad-only/vendedor-only, creadas y descartadas dentro de la
 -- misma transacción de la suite (rollback al final, igual que todo lo demás).
+-- Ambas existen primero en auth.users (audit_logs_actor_user_id_fkey lo exige)
+-- y luego en public.profiles (public.profiles.id referencia auth.users(id) con
+-- on delete cascade) antes de asignarles un rol en public.user_roles.
 -- ---------------------------------------------------------------------------
 insert into auth.users(id) values
   ('90000000-0000-4000-8000-0000000000c1'),
@@ -187,7 +214,7 @@ select throws_ok(
     99999,'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'::uuid,null,null,'monto distinto',
     'approved'::public.payment_record_status,null,'90000000-0000-4000-8000-0000000000f1'::uuid
   )$$,
-  'P0001','IDEMPOTENCY_KEY_REUSED: Esta llave de idempotencia ya se usó con un monto o método distinto',
+  '22023','IDEMPOTENCY_KEY_REUSED: Esta llave de idempotencia ya se usó con un monto o método distinto',
   'H-05b: reusar la llave con un monto distinto se rechaza con un error funcional claro'
 );
 select throws_ok(
@@ -196,16 +223,23 @@ select throws_ok(
     999999999,'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'::uuid,null,null,'overpay',
     'approved'::public.payment_record_status,null,gen_random_uuid()
   )$$,
-  'P0001', null,
+  '23514', null,
   'H-05c: un pago que supera el saldo pendiente sigue siendo rechazado'
 );
 
+-- H-13 must run as the contabilidad-only identity — the previous statements
+-- above ran as the seeded superadmin (10000000-...0010), and that claim is
+-- still active here (is_local=true persists for the rest of the transaction)
+-- unless explicitly switched. Forgetting this switch previously made this
+-- assertion silently pass as superadmin (who legitimately CAN deliver),
+-- masking the very role check it's meant to verify.
+select set_config('request.jwt.claims','{"role":"authenticated","sub":"90000000-0000-4000-8000-0000000000c1"}',true);
 select throws_ok(
   $$select public.deliver_and_pay_order(
     (select id from public.orders where idempotency_key='90000000-0000-4000-8000-0000000000e1'),
     'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'::uuid,null,null,'contabilidad intenta entregar',gen_random_uuid()
   )$$,
-  'P0001', null,
+  '42501', null,
   'H-13: contabilidad-only NO puede disparar el paso de entrega de un pedido no entregado'
 );
 
@@ -215,7 +249,7 @@ select throws_ok(
     (select id from public.orders where idempotency_key='90000000-0000-4000-8000-0000000000e1'),
     'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'::uuid,null,null,'vendedor intenta entregar',gen_random_uuid()
   )$$,
-  'P0001', null,
+  '42501', null,
   'H-13: vendedor-only tampoco puede disparar el paso de entrega (transition_order_status ya lo bloquea)'
 );
 
