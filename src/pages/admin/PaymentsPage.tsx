@@ -429,7 +429,7 @@ export function PaymentsPage() {
               type="number"
               min="1"
               max={orderBalance || undefined}
-              step="100"
+              step="1"
               className={inputClass}
               value={form.amount}
               onChange={(event) =>

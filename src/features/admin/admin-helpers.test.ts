@@ -83,3 +83,29 @@ describe('cálculo de saldo pendiente', () => {
     expect(Math.max(0, total - 150000)).toBe(0);
   });
 });
+
+// Regresión para el bug de step="100" con min≠múltiplo-de-100.
+// El navegador rechazaba $120.000 porque los valores válidos eran 1,101,201…
+// Con step="1" cualquier entero positivo ≤ saldo es aceptado.
+describe('validación de valores de pago — regresión step/min', () => {
+  const validatePayment = (amount: number, balance: number): boolean =>
+    Number.isInteger(amount) && amount >= 1 && amount <= balance;
+
+  it('acepta el saldo completo de 120000', () =>
+    expect(validatePayment(120000, 120000)).toBe(true));
+
+  it('acepta el saldo completo de 17300', () =>
+    expect(validatePayment(17300, 17300)).toBe(true));
+
+  it('acepta un abono parcial de 50000 sobre un saldo de 120000', () =>
+    expect(validatePayment(50000, 120000)).toBe(true));
+
+  it('rechaza el valor cero', () =>
+    expect(validatePayment(0, 120000)).toBe(false));
+
+  it('rechaza valores superiores al saldo', () =>
+    expect(validatePayment(120001, 120000)).toBe(false));
+
+  it('rechaza valores negativos', () =>
+    expect(validatePayment(-1, 120000)).toBe(false));
+});

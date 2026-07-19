@@ -127,7 +127,7 @@ export function DeliverAndPayModal({ open, order, payments, onClose, onSuccess }
                 type="number"
                 min="0"
                 max={balance}
-                step="100"
+                step="1"
                 className={inputClass}
                 value={amount}
                 onChange={(event) => setAmount(event.target.value)}
