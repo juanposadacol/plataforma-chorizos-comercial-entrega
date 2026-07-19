@@ -42,7 +42,7 @@ export const orderStatusLabels: Record<string, string> = {
 
 export const paymentStatusLabels: Record<string, string> = {
   pending: 'Pendiente',
-  verifying: 'En verificación',
+  under_review: 'En verificación',
   partial: 'Parcial',
   paid: 'Pagado',
   credit: 'Crédito',

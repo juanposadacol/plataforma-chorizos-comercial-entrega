@@ -1,6 +1,15 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, CheckCircle2, MapPin, Phone, Printer, Save, UserRound } from 'lucide-react';
+import {
+  ArrowLeft,
+  CheckCircle2,
+  MapPin,
+  Phone,
+  Printer,
+  Save,
+  Truck,
+  UserRound,
+} from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
 import {
   fetchRecord,
@@ -9,6 +18,13 @@ import {
   updateRecord,
 } from '../../features/admin/adminService';
 import type { AdminOrder, AdminOrderItem, Payment } from '../../features/admin/types';
+import {
+  itemSubtotal,
+  orderDeliveryFee,
+  orderDiscount,
+  orderSubtotal,
+  orderTotal,
+} from '../../features/admin/types';
 import {
   firstText,
   formatAdminDate,
@@ -32,11 +48,15 @@ import {
   StatusBadge,
   type TableColumn,
 } from '../../features/admin/components/AdminUi';
+import { CancelReturnModal } from '../../features/admin/orders/CancelReturnModal';
+import { DeliverAndPayModal } from '../../features/admin/orders/DeliverAndPayModal';
 
 interface StatusHistory extends Record<string, unknown> {
   id: string;
-  status: string;
+  new_status: string;
+  previous_status?: string | null;
   notes?: string | null;
+  reason?: string | null;
   created_at: string;
 }
 
@@ -53,6 +73,8 @@ export function OrderDetailPage() {
   const [internalNotes, setInternalNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
+  const [cancelModal, setCancelModal] = useState<'cancelled' | 'returned' | null>(null);
+  const [deliverPayOpen, setDeliverPayOpen] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -102,10 +124,14 @@ export function OrderDetailPage() {
     [payments],
   );
 
+  const total = order ? orderTotal(order) : 0;
+  const balance = Math.max(0, total - paid);
+
   const transition = async () => {
     if (!order || !nextStatus || nextStatus === order.status) return;
-    if (['cancelled', 'returned'].includes(nextStatus) && !transitionNote.trim()) {
-      setError('Escribe el motivo para cancelar o devolver un pedido.');
+    // Cancel/return must go through the modal to capture a mandatory reason.
+    if (nextStatus === 'cancelled' || nextStatus === 'returned') {
+      setCancelModal(nextStatus);
       return;
     }
     setSaving(true);
@@ -115,6 +141,27 @@ export function OrderDetailPage() {
         p_order_id: order.id,
         p_new_status: nextStatus,
         p_notes: transitionNote || null,
+      });
+      setTransitionNote('');
+      setSuccess('Estado actualizado y registrado en el historial.');
+      await load();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'No fue posible cambiar el estado.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCancelConfirm = async (reason: string) => {
+    if (!order || !cancelModal) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await invokeAdminRpc('transition_order_status', {
+        p_order_id: order.id,
+        p_new_status: cancelModal,
+        p_reason: reason,
+        p_notes: reason,
       });
       setTransitionNote('');
       setSuccess('Estado actualizado y registrado en el historial.');
@@ -161,13 +208,13 @@ export function OrderDetailPage() {
     {
       key: 'subtotal',
       header: 'Subtotal',
-      render: (item) => <span className="font-black">{formatMoney(item.subtotal)}</span>,
+      render: (item) => <span className="font-black">{formatMoney(itemSubtotal(item))}</span>,
     },
     {
       key: 'profit',
       header: 'Utilidad',
       render: (item) =>
-        formatMoney(item.gross_profit ?? toNumber(item.subtotal) - toNumber(item.total_cost)),
+        formatMoney(item.gross_profit ?? itemSubtotal(item) - toNumber(item.total_cost)),
     },
   ];
 
@@ -198,6 +245,8 @@ export function OrderDetailPage() {
       </div>
     );
 
+  const isTerminal = order.status === 'cancelled' || order.status === 'returned';
+
   return (
     <>
       <Link
@@ -217,9 +266,15 @@ export function OrderDetailPage() {
               <Printer className="h-4 w-4" />
               Imprimir / PDF
             </Button>
+            {!isTerminal && (
+              <Button onClick={() => setDeliverPayOpen(true)}>
+                <Truck className="h-4 w-4" />
+                Entregar y pagar
+              </Button>
+            )}
             <Link
               to={`/admin/pagos?pedido=${order.id}`}
-              className="inline-flex min-h-10 items-center justify-center rounded-xl bg-wine px-4 py-2 text-sm font-bold text-white hover:bg-wine-dark"
+              className="inline-flex min-h-10 items-center justify-center rounded-xl border border-artisan-line bg-white px-4 py-2 text-sm font-bold text-artisan-ink hover:bg-artisan-paper"
             >
               Registrar pago
             </Link>
@@ -297,7 +352,7 @@ export function OrderDetailPage() {
                   <p className="text-xs font-bold uppercase tracking-wide text-artisan-muted">
                     Observaciones del cliente
                   </p>
-                  <p className="mt-2 text-sm leading-6">{order.customer_notes}</p>
+                  <p className="mt-2 text-sm leading-6">{String(order.customer_notes)}</p>
                 </div>
               )}
             </div>
@@ -309,21 +364,19 @@ export function OrderDetailPage() {
             <dl className="space-y-3 p-5 text-sm">
               <div className="flex justify-between">
                 <dt className="text-artisan-muted">Subtotal</dt>
-                <dd className="font-semibold">{formatMoney(order.subtotal)}</dd>
+                <dd className="font-semibold">{formatMoney(orderSubtotal(order))}</dd>
               </div>
               <div className="flex justify-between">
                 <dt className="text-artisan-muted">Descuento</dt>
-                <dd className="font-semibold">
-                  − {formatMoney(order.discount_amount ?? order.discount)}
-                </dd>
+                <dd className="font-semibold">− {formatMoney(orderDiscount(order))}</dd>
               </div>
               <div className="flex justify-between">
                 <dt className="text-artisan-muted">Domicilio</dt>
-                <dd className="font-semibold">{formatMoney(order.delivery_fee)}</dd>
+                <dd className="font-semibold">{formatMoney(orderDeliveryFee(order))}</dd>
               </div>
               <div className="flex justify-between border-t border-artisan-line pt-3 text-lg">
                 <dt className="font-black">Total</dt>
-                <dd className="font-black text-wine">{formatMoney(order.total)}</dd>
+                <dd className="font-black text-wine">{formatMoney(total)}</dd>
               </div>
               <div className="flex justify-between">
                 <dt className="text-artisan-muted">Pagado</dt>
@@ -331,9 +384,7 @@ export function OrderDetailPage() {
               </div>
               <div className="flex justify-between">
                 <dt className="text-artisan-muted">Saldo</dt>
-                <dd className="font-black">
-                  {formatMoney(Math.max(0, toNumber(order.total) - paid))}
-                </dd>
+                <dd className="font-black">{formatMoney(balance)}</dd>
               </div>
               <div className="flex justify-between pt-2">
                 <dt className="text-artisan-muted">Estado del pago</dt>
@@ -358,6 +409,7 @@ export function OrderDetailPage() {
                   className={inputClass}
                   value={nextStatus}
                   onChange={(event) => setNextStatus(event.target.value)}
+                  disabled={isTerminal}
                 >
                   {orderStatuses.map((value) => (
                     <option key={value} value={value}>
@@ -366,22 +418,33 @@ export function OrderDetailPage() {
                   ))}
                 </select>
               </label>
-              <label>
-                <span className={labelClass}>Nota o motivo</span>
-                <textarea
-                  className={`${inputClass} min-h-20`}
-                  value={transitionNote}
-                  onChange={(event) => setTransitionNote(event.target.value)}
-                  placeholder="Obligatorio para cancelaciones y devoluciones"
-                />
-              </label>
+              {nextStatus !== 'cancelled' && nextStatus !== 'returned' && (
+                <label>
+                  <span className={labelClass}>Nota (opcional)</span>
+                  <textarea
+                    className={`${inputClass} min-h-20`}
+                    value={transitionNote}
+                    onChange={(event) => setTransitionNote(event.target.value)}
+                    placeholder="Observación sobre este cambio de estado"
+                  />
+                </label>
+              )}
+              {(nextStatus === 'cancelled' || nextStatus === 'returned') && (
+                <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                  Al aplicar este estado se abrirá un modal para registrar el motivo obligatorio.
+                </p>
+              )}
               <Button
                 className="w-full"
-                disabled={saving || nextStatus === order.status}
+                disabled={saving || nextStatus === order.status || isTerminal}
                 onClick={() => void transition()}
               >
                 <CheckCircle2 className="h-4 w-4" />
-                Aplicar estado
+                {nextStatus === 'cancelled'
+                  ? 'Cancelar pedido…'
+                  : nextStatus === 'returned'
+                    ? 'Registrar devolución…'
+                    : 'Aplicar estado'}
               </Button>
             </div>
           </article>
@@ -416,11 +479,18 @@ export function OrderDetailPage() {
                       <span className="absolute left-[5px] top-4 h-full w-px bg-artisan-line" />
                     )}
                     <div>
-                      <StatusBadge status={entry.status} label={orderStatusLabels[entry.status]} />
+                      <StatusBadge
+                        status={entry.new_status}
+                        label={orderStatusLabels[entry.new_status]}
+                      />
                       <p className="mt-1 text-xs text-artisan-muted">
                         {formatAdminDate(entry.created_at, true)}
                       </p>
-                      {entry.notes && <p className="mt-1 text-sm">{entry.notes}</p>}
+                      {(entry.reason || entry.notes) && (
+                        <p className="mt-1 text-sm text-artisan-muted">
+                          {String(entry.reason ?? entry.notes)}
+                        </p>
+                      )}
                     </div>
                   </li>
                 ))}
@@ -434,6 +504,26 @@ export function OrderDetailPage() {
           </article>
         </div>
       </section>
+
+      {cancelModal && (
+        <CancelReturnModal
+          open
+          order={order}
+          targetStatus={cancelModal}
+          onClose={() => setCancelModal(null)}
+          onConfirm={handleCancelConfirm}
+        />
+      )}
+
+      {deliverPayOpen && (
+        <DeliverAndPayModal
+          open
+          order={order}
+          payments={payments}
+          onClose={() => setDeliverPayOpen(false)}
+          onSuccess={load}
+        />
+      )}
     </>
   );
 }

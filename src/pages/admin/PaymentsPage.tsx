@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { CheckCircle2, Plus, Save } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import type { AdminOrder, Payment } from '../../features/admin/types';
+import { orderTotal } from '../../features/admin/types';
 import { invokeAdminRpc } from '../../features/admin/adminService';
 import { useAdminData } from '../../features/admin/useAdminData';
 import {
@@ -81,6 +82,7 @@ export function PaymentsPage() {
     }
   }, [params]);
 
+
   const orderById = useMemo(
     () => new Map(ordersState.data.map((order) => [order.id, order])),
     [ordersState.data],
@@ -110,7 +112,7 @@ export function PaymentsPage() {
         payment.order_id === form.order_id && !['rejected', 'refunded'].includes(payment.status),
     )
     .reduce((sum, payment) => sum + toNumber(payment.amount), 0);
-  const orderBalance = Math.max(0, toNumber(selectedOrder?.total) - orderPayments);
+  const orderBalance = Math.max(0, (selectedOrder ? orderTotal(selectedOrder) : 0) - orderPayments);
   const totalCollected = paymentsState.data
     .filter((payment) => !['rejected', 'refunded'].includes(payment.status))
     .reduce((sum, payment) => sum + toNumber(payment.amount), 0);
@@ -121,6 +123,13 @@ export function PaymentsPage() {
   const overdue = receivablesState.data
     .filter((item) => item.status === 'overdue' || toNumber(item.days_overdue) > 0)
     .reduce((sum, item) => sum + toNumber(item.balance), 0);
+
+  // Pre-fill amount with current balance when an order is selected and the field is still empty.
+  useEffect(() => {
+    if (form.order_id && form.amount === '' && orderBalance > 0) {
+      setForm((current) => ({ ...current, amount: String(Math.round(orderBalance)) }));
+    }
+  }, [form.order_id, form.amount, orderBalance]);
 
   const openCreate = () => {
     setForm({ order_id: '', amount: '', method: 'transfer', reference: '', notes: '' });
@@ -396,7 +405,7 @@ export function PaymentsPage() {
                   <option key={order.id} value={order.id}>
                     #{firstText(order, 'order_number', 'consecutive')} ·{' '}
                     {firstText(order, 'customer_name_snapshot', 'customer_name')} ·{' '}
-                    {formatMoney(order.total)}
+                    {formatMoney(orderTotal(order))}
                   </option>
                 ))}
             </select>
@@ -405,7 +414,7 @@ export function PaymentsPage() {
             <div className="grid grid-cols-2 gap-3 rounded-xl bg-artisan-paper p-4 text-sm">
               <div>
                 <p className="text-xs font-bold uppercase text-artisan-muted">Total</p>
-                <p className="mt-1 font-black">{formatMoney(selectedOrder.total)}</p>
+                <p className="mt-1 font-black">{formatMoney(orderTotal(selectedOrder))}</p>
               </div>
               <div>
                 <p className="text-xs font-bold uppercase text-artisan-muted">Saldo</p>

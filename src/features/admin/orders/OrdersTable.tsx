@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
-import { ArrowRight, RefreshCw } from 'lucide-react';
+import { ArrowRight, RefreshCw, Truck } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { invokeAdminRpc } from '../adminService';
 import type { AdminOrder } from '../types';
+import { orderTotal } from '../types';
 import {
   firstText,
   formatAdminDate,
@@ -25,6 +26,11 @@ import {
   StatusBadge,
   type TableColumn,
 } from '../components/AdminUi';
+import { CancelReturnModal } from './CancelReturnModal';
+import { DeliverAndPayModal } from './DeliverAndPayModal';
+
+// Estados que solo se pueden alcanzar mediante modal (requieren motivo o confirmación especial).
+const MODAL_STATUSES = new Set<string>(['cancelled', 'returned']);
 
 export function OrdersTable() {
   const { data, loading, refreshing, error, reload } = useAdminData<AdminOrder>(
@@ -37,6 +43,15 @@ export function OrdersTable() {
   const [paymentStatus, setPaymentStatus] = useState('all');
   const [updating, setUpdating] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
+
+  // Modal de cancelación/devolución.
+  const [cancelModal, setCancelModal] = useState<{
+    order: AdminOrder;
+    target: 'cancelled' | 'returned';
+  } | null>(null);
+
+  // Modal de "entregar y pagar".
+  const [deliverPayModal, setDeliverPayModal] = useState<AdminOrder | null>(null);
 
   const filtered = useMemo(
     () =>
@@ -51,6 +66,14 @@ export function OrdersTable() {
 
   const transition = async (order: AdminOrder, nextStatus: string) => {
     if (nextStatus === order.status) return;
+    // Cancelaciones y devoluciones van por modal para capturar el motivo.
+    if (MODAL_STATUSES.has(nextStatus)) {
+      setCancelModal({
+        order,
+        target: nextStatus as 'cancelled' | 'returned',
+      });
+      return;
+    }
     setUpdating(order.id);
     setMutationError(null);
     try {
@@ -62,8 +85,27 @@ export function OrdersTable() {
       await reload();
     } catch (caught) {
       setMutationError(
-        caught instanceof Error ? caught.message : 'No fue posible cambiar el estado.',
+        caught instanceof Error
+          ? caught.message
+          : 'No fue posible cambiar el estado del pedido.',
       );
+    } finally {
+      setUpdating(null);
+    }
+  };
+
+  const handleCancelConfirm = async (reason: string) => {
+    if (!cancelModal) return;
+    setUpdating(cancelModal.order.id);
+    setMutationError(null);
+    try {
+      await invokeAdminRpc('transition_order_status', {
+        p_order_id: cancelModal.order.id,
+        p_new_status: cancelModal.target,
+        p_reason: reason,
+        p_notes: reason,
+      });
+      await reload();
     } finally {
       setUpdating(null);
     }
@@ -105,7 +147,9 @@ export function OrdersTable() {
     {
       key: 'total',
       header: 'Total',
-      render: (order) => <span className="font-black">{formatMoney(order.total)}</span>,
+      render: (order) => (
+        <span className="font-black">{formatMoney(orderTotal(order))}</span>
+      ),
     },
     {
       key: 'payment',
@@ -125,7 +169,11 @@ export function OrdersTable() {
           aria-label={`Estado del pedido ${firstText(order, 'order_number')}`}
           className="rounded-lg border border-artisan-line bg-white px-2 py-1.5 text-xs font-bold text-artisan-ink outline-none focus:border-wine"
           value={order.status}
-          disabled={updating === order.id}
+          disabled={
+            updating === order.id ||
+            order.status === 'cancelled' ||
+            order.status === 'returned'
+          }
           onClick={(event) => event.stopPropagation()}
           onChange={(event) => void transition(order, event.target.value)}
         >
@@ -140,15 +188,31 @@ export function OrdersTable() {
     {
       key: 'open',
       header: '',
-      className: 'w-12',
+      className: 'w-24',
       render: (order) => (
-        <Link
-          to={`/admin/pedidos/${order.id}`}
-          aria-label="Abrir pedido"
-          className="grid h-9 w-9 place-items-center rounded-lg text-wine hover:bg-wine/10"
-        >
-          <ArrowRight className="h-4 w-4" />
-        </Link>
+        <div className="flex items-center gap-1">
+          {!['cancelled', 'returned', 'delivered'].includes(order.status ?? '') && (
+            <button
+              type="button"
+              aria-label="Entregar y pagar"
+              title="Entregar y pagar"
+              className="grid h-9 w-9 place-items-center rounded-lg text-emerald-700 hover:bg-emerald-50"
+              onClick={(event) => {
+                event.stopPropagation();
+                setDeliverPayModal(order);
+              }}
+            >
+              <Truck className="h-4 w-4" />
+            </button>
+          )}
+          <Link
+            to={`/admin/pedidos/${order.id}`}
+            aria-label="Abrir pedido"
+            className="grid h-9 w-9 place-items-center rounded-lg text-wine hover:bg-wine/10"
+          >
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+        </div>
       ),
     },
   ];
@@ -230,6 +294,26 @@ export function OrdersTable() {
           />
         )}
       </div>
+
+      {cancelModal && (
+        <CancelReturnModal
+          open
+          order={cancelModal.order}
+          targetStatus={cancelModal.target}
+          onClose={() => setCancelModal(null)}
+          onConfirm={handleCancelConfirm}
+        />
+      )}
+
+      {deliverPayModal && (
+        <DeliverAndPayModal
+          open
+          order={deliverPayModal}
+          payments={[]}
+          onClose={() => setDeliverPayModal(null)}
+          onSuccess={reload}
+        />
+      )}
     </div>
   );
 }

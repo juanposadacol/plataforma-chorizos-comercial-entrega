@@ -1,6 +1,7 @@
 import { Suspense, lazy } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { LoadingState } from './components/ui/AsyncState';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { AdminGuard } from './features/auth/AdminGuard';
 import { AdminLoginPage } from './pages/AdminLoginPage';
 import { CustomerOrdersPage } from './pages/CustomerOrdersPage';
@@ -82,7 +83,7 @@ export function App() {
         <Route path="/admin/acceso" element={<AdminLoginPage />} />
         <Route path="/admin/login" element={<Navigate to="/admin/acceso" replace />} />
         <Route element={<AdminGuard />}>
-          <Route path="/admin" element={<AdminLayout />}>
+          <Route path="/admin" element={<ErrorBoundary><AdminLayout /></ErrorBoundary>}>
             <Route index element={<AdminDashboardPage />} />
             <Route path="pedidos" element={<OrdersPage />} />
             <Route path="pedidos/:id" element={<OrderDetailPage />} />

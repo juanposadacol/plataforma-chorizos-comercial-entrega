@@ -108,7 +108,7 @@ export function SearchField({
   );
 }
 
-export function StatusBadge({ status, label }: { status: string; label?: string }) {
+export function StatusBadge({ status, label }: { status?: string; label?: string }) {
   const tones = {
     wine: 'bg-wine/10 text-wine',
     gold: 'bg-amber-100 text-amber-800',
@@ -117,16 +117,18 @@ export function StatusBadge({ status, label }: { status: string; label?: string 
     blue: 'bg-sky-100 text-sky-800',
     gray: 'bg-stone-100 text-stone-700',
   };
+  const safeStatus = status ?? '';
   const translated =
-    label ??
-    orderStatusLabels[status] ??
-    paymentStatusLabels[status] ??
-    status.replaceAll('_', ' ');
+    (label ??
+      orderStatusLabels[safeStatus] ??
+      paymentStatusLabels[safeStatus] ??
+      safeStatus.replaceAll('_', ' ')) ||
+    '—';
   return (
     <span
       className={clsx(
         'inline-flex rounded-full px-2.5 py-1 text-xs font-bold capitalize',
-        tones[getStatusTone(status)],
+        tones[getStatusTone(safeStatus)],
       )}
     >
       {translated}

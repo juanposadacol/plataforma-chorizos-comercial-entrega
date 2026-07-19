@@ -11,8 +11,15 @@ export type OrderStatus =
   | 'cancelled'
   | 'returned';
 
+// Nota: 'under_review' es el valor real en la BD (el alias 'verifying' era incorrecto).
 export type PaymentStatus =
-  'pending' | 'verifying' | 'partial' | 'paid' | 'credit' | 'rejected' | 'refunded';
+  | 'pending'
+  | 'under_review'
+  | 'partial'
+  | 'paid'
+  | 'credit'
+  | 'rejected'
+  | 'refunded';
 
 export interface AdminOrder extends AdminRecord {
   order_number?: string;
@@ -29,15 +36,26 @@ export interface AdminOrder extends AdminRecord {
   requested_date?: string | null;
   requested_delivery_date?: string | null;
   delivery_method?: string | null;
+  delivery_method_name?: string | null;
   payment_method?: string | null;
+  payment_method_name?: string | null;
   status: OrderStatus | string;
   payment_status: PaymentStatus | string;
+  // Columnas reales de la BD (snake_case). La interfaz acepta ambas variantes
+  // para compatibilidad con distintas consultas.
+  subtotal_amount?: number;
   subtotal?: number;
-  discount?: number;
   discount_amount?: number;
+  discount?: number;
+  delivery_amount?: number;
   delivery_fee?: number;
-  total: number;
+  tax_amount?: number;
+  total_amount?: number;
+  /** @deprecated usa total_amount */
+  total?: number;
+  amount_paid?: number;
   cost_of_sales?: number;
+  sales_cost?: number;
   cost_total?: number;
   gross_profit?: number;
   customer_notes?: string | null;
@@ -45,6 +63,9 @@ export interface AdminOrder extends AdminRecord {
   created_at: string;
   updated_at?: string;
   delivered_at?: string | null;
+  cancelled_at?: string | null;
+  returned_at?: string | null;
+  cancellation_reason?: string | null;
 }
 
 export interface AdminOrderItem extends AdminRecord {
@@ -55,9 +76,14 @@ export interface AdminOrderItem extends AdminRecord {
   name?: string;
   quantity: number;
   unit_price: number;
+  public_unit_price?: number;
   public_price?: number;
   discount?: number;
-  subtotal: number;
+  discount_amount?: number;
+  subtotal_amount?: number;
+  /** @deprecated usa subtotal_amount */
+  subtotal?: number;
+  total_amount?: number;
   unit_cost?: number;
   total_cost?: number;
   gross_profit?: number;
@@ -98,6 +124,7 @@ export interface AdminProduct extends AdminRecord {
   category_id?: string | null;
   brand_id?: string | null;
   image_url?: string | null;
+  main_image_url?: string | null;
   public_price: number;
   current_cost?: number;
   average_cost?: number;
@@ -262,3 +289,19 @@ export interface DateRange {
   to: Date;
   label: string;
 }
+
+/** Helpers para resolver el nombre real de la columna en la BD */
+export const orderTotal = (order: AdminOrder): number =>
+  (order.total_amount ?? order.total ?? 0) as number;
+
+export const orderSubtotal = (order: AdminOrder): number =>
+  (order.subtotal_amount ?? order.subtotal ?? 0) as number;
+
+export const orderDeliveryFee = (order: AdminOrder): number =>
+  (order.delivery_amount ?? order.delivery_fee ?? 0) as number;
+
+export const orderDiscount = (order: AdminOrder): number =>
+  (order.discount_amount ?? order.discount ?? 0) as number;
+
+export const itemSubtotal = (item: AdminOrderItem): number =>
+  (item.subtotal_amount ?? item.subtotal ?? 0) as number;
