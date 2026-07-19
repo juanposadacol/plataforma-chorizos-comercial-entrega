@@ -1,27 +1,30 @@
 import { useState, type FormEvent } from 'react';
 import { CheckCircle2 } from 'lucide-react';
-import type { AdminOrder, Payment } from '../types';
-import { orderTotal } from '../types';
-import { firstText, formatMoney, toNumber } from '../utils';
+import type { AdminOrder } from '../types';
+import { orderAmountPaid, orderBalance, orderTotal } from '../types';
+import { canDeliverViaCombinedAction, firstText, formatMoney } from '../utils';
 import { Button, inputClass, labelClass, Modal } from '../components/AdminUi';
 import { invokeAdminRpc } from '../adminService';
 import { usePaymentMethods } from '../usePaymentMethods';
+import { useAuth } from '../../auth/AuthContext';
 
 interface Props {
   open: boolean;
   order: AdminOrder;
-  payments: Payment[];
   onClose: () => void;
   onSuccess: () => Promise<void>;
 }
 
-export function DeliverAndPayModal({ open, order, payments, onClose, onSuccess }: Props) {
+export function DeliverAndPayModal({ open, order, onClose, onSuccess }: Props) {
+  // H-03: pagado/saldo siempre se leen de orders.amount_paid/total_amount — la
+  // única fuente autoritativa, mantenida por register_payment/deliver_and_pay_order
+  // en el servidor. Nunca se re-derivan sumando un array de pagos local (esa suma
+  // podía llegar vacía, desactualizada o con un filtro de estado distinto).
   const totalAmount = orderTotal(order);
-  const approvedPaid = payments
-    .filter((p) => p.status === 'approved' && !p.deleted_at)
-    .reduce((sum, p) => sum + toNumber(p.amount), 0);
-  const balance = Math.max(0, totalAmount - approvedPaid);
+  const approvedPaid = orderAmountPaid(order);
+  const balance = orderBalance(order);
 
+  const { access } = useAuth();
   const { methods: paymentMethods } = usePaymentMethods();
   // Stores the UUID of the selected method; falls back to first available when empty.
   const [methodId, setMethodId] = useState('');
@@ -30,6 +33,24 @@ export function DeliverAndPayModal({ open, order, payments, onClose, onSuccess }
   const [reference, setReference] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // H-05: generada una sola vez por apertura del modal (una vez por "operación" en
+  // curso) y NUNCA regenerada mientras haya un intento pendiente o se reintente
+  // tras un error — así un reintento de red no puede registrar un segundo pago.
+  // Como este componente se monta de nuevo cada vez que se abre (ver OrdersTable/
+  // OrderDetailPage: `{condition && <DeliverAndPayModal .../>}`), una nueva llave
+  // se genera automáticamente al iniciar una nueva operación (pedido distinto,
+  // reapertura tras éxito o cancelación) sin necesidad de lógica adicional.
+  const [idempotencyKey] = useState(() => crypto.randomUUID());
+
+  const alreadyDelivered = order.status === 'delivered';
+  const alreadyPaid = order.payment_status === 'paid';
+  // H-13: contabilidad y vendedor pueden pagar cualquier pedido, pero ninguno
+  // de los dos puede disparar el paso de entrega de esta acción combinada —
+  // solo superadmin/admin, igual que exige el servidor (transition_order_status
+  // ya bloquea a un vendedor sin rol de bodega de avanzar más allá de
+  // 'confirmed'). Si el pedido ya está entregado no aplica: solo se
+  // registrará el pago.
+  const canDeliver = alreadyDelivered || canDeliverViaCombinedAction(access.roles);
 
   const handleClose = () => {
     if (!saving) {
@@ -40,6 +61,7 @@ export function DeliverAndPayModal({ open, order, payments, onClose, onSuccess }
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
+    if (saving) return; // Guardia extra contra doble envío por reentrancia.
     const payAmount = Number(amount);
     if (payAmount < 0) {
       setError('El valor no puede ser negativo.');
@@ -58,18 +80,19 @@ export function DeliverAndPayModal({ open, order, payments, onClose, onSuccess }
         p_amount: payAmount > 0 ? payAmount : null,
         p_reference: reference || null,
         p_notes: 'Entregado y pagado desde el panel de administración',
+        p_idempotency_key: idempotencyKey,
       });
       await onSuccess();
       onClose();
     } catch (caught) {
+      // No se regenera idempotencyKey aquí: un reintento (mismo timeout, mismo
+      // error) debe reutilizar la misma llave para que el servidor lo trate como
+      // el mismo intento, nunca como un pago nuevo.
       setError(caught instanceof Error ? caught.message : 'No fue posible completar la acción.');
     } finally {
       setSaving(false);
     }
   };
-
-  const alreadyDelivered = order.status === 'delivered';
-  const alreadyPaid = order.payment_status === 'paid';
 
   return (
     <Modal open={open} title="Marcar como entregado y pagado" onClose={handleClose}>
@@ -104,6 +127,14 @@ export function DeliverAndPayModal({ open, order, payments, onClose, onSuccess }
         {alreadyDelivered && (
           <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
             Este pedido ya está marcado como entregado. Se registrará únicamente el pago.
+          </div>
+        )}
+
+        {!canDeliver && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+            Tu rol solo puede registrar pagos de pedidos ya entregados. Pide a un administrador o
+            a bodega que marque la entrega primero, o usa "Registrar pago" en Pagos y cartera una
+            vez entregado.
           </div>
         )}
 
@@ -167,15 +198,17 @@ export function DeliverAndPayModal({ open, order, payments, onClose, onSuccess }
           <Button type="button" variant="secondary" onClick={handleClose} disabled={saving}>
             Cancelar
           </Button>
-          <Button type="submit" disabled={saving}>
+          <Button type="submit" disabled={saving || !canDeliver}>
             <CheckCircle2 className="h-4 w-4" />
             {saving
               ? 'Procesando…'
-              : alreadyPaid
-                ? 'Marcar como entregado'
-                : balance === 0
+              : !canDeliver
+                ? 'Sin permiso para entregar'
+                : alreadyPaid
                   ? 'Marcar como entregado'
-                  : 'Entregar y pagar'}
+                  : balance === 0
+                    ? 'Marcar como entregado'
+                    : 'Entregar y pagar'}
           </Button>
         </div>
       </form>

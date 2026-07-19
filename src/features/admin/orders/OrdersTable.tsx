@@ -5,6 +5,7 @@ import { invokeAdminRpc } from '../adminService';
 import type { AdminOrder } from '../types';
 import { orderTotal } from '../types';
 import {
+  canDeliverViaCombinedAction,
   firstText,
   formatAdminDate,
   formatMoney,
@@ -14,6 +15,7 @@ import {
   paymentStatusLabels,
 } from '../utils';
 import { useAdminData } from '../useAdminData';
+import { useAuth } from '../../auth/AuthContext';
 import {
   Button,
   DataTable,
@@ -33,6 +35,13 @@ import { DeliverAndPayModal } from './DeliverAndPayModal';
 const MODAL_STATUSES = new Set<string>(['cancelled', 'returned']);
 
 export function OrdersTable() {
+  const { access } = useAuth();
+  // H-13: ni contabilidad ni vendedor pueden disparar el paso de entrega de
+  // "Entregar y pagar" (esta tabla solo ofrece el botón para pedidos que aún
+  // no están entregados), así que se oculta el atajo para evitar ofrecer una
+  // acción que el servidor rechazará. Ambos roles siguen pudiendo registrar
+  // pagos de pedidos ya entregados desde Pagos y cartera.
+  const canUseDeliverAndPay = canDeliverViaCombinedAction(access.roles);
   const { data, loading, refreshing, error, reload } = useAdminData<AdminOrder>(
     'orders',
     { orderBy: 'created_at', limit: 1000 },
@@ -191,7 +200,8 @@ export function OrdersTable() {
       className: 'w-24',
       render: (order) => (
         <div className="flex items-center gap-1">
-          {!['cancelled', 'returned', 'delivered'].includes(order.status ?? '') && (
+          {canUseDeliverAndPay &&
+            !['cancelled', 'returned', 'delivered'].includes(order.status ?? '') && (
             <button
               type="button"
               aria-label="Entregar y pagar"
@@ -309,7 +319,6 @@ export function OrdersTable() {
         <DeliverAndPayModal
           open
           order={deliverPayModal}
-          payments={[]}
           onClose={() => setDeliverPayModal(null)}
           onSuccess={reload}
         />

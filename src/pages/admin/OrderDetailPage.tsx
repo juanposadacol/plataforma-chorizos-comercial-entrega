@@ -1,5 +1,5 @@
 /* eslint-disable react-hooks/set-state-in-effect */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ArrowLeft,
   CheckCircle2,
@@ -17,15 +17,18 @@ import {
   invokeAdminRpc,
   updateRecord,
 } from '../../features/admin/adminService';
-import type { AdminOrder, AdminOrderItem, Payment } from '../../features/admin/types';
+import type { AdminOrder, AdminOrderItem } from '../../features/admin/types';
 import {
   itemSubtotal,
+  orderAmountPaid,
+  orderBalance,
   orderDeliveryFee,
   orderDiscount,
   orderSubtotal,
   orderTotal,
 } from '../../features/admin/types';
 import {
+  canDeliverViaCombinedAction,
   firstText,
   formatAdminDate,
   formatMoney,
@@ -34,6 +37,7 @@ import {
   paymentStatusLabels,
   toNumber,
 } from '../../features/admin/utils';
+import { useAuth } from '../../features/auth/AuthContext';
 import {
   Button,
   DataTable,
@@ -62,10 +66,10 @@ interface StatusHistory extends Record<string, unknown> {
 
 export function OrderDetailPage() {
   const { id } = useParams();
+  const { access } = useAuth();
   const [order, setOrder] = useState<AdminOrder | null>(null);
   const [items, setItems] = useState<AdminOrderItem[]>([]);
   const [history, setHistory] = useState<StatusHistory[]>([]);
-  const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [nextStatus, setNextStatus] = useState('');
@@ -81,7 +85,7 @@ export function OrderDetailPage() {
     setLoading(true);
     setError(null);
     try {
-      const [orderData, itemData, historyData, paymentData] = await Promise.all([
+      const [orderData, itemData, historyData] = await Promise.all([
         fetchRecord<AdminOrder>('orders', id),
         fetchRecords<AdminOrderItem>('order_items', {
           eq: { order_id: id },
@@ -93,16 +97,10 @@ export function OrderDetailPage() {
           orderBy: 'created_at',
           ascending: true,
         }),
-        fetchRecords<Payment>('payments', {
-          eq: { order_id: id },
-          orderBy: 'created_at',
-          ascending: false,
-        }),
       ]);
       setOrder(orderData);
       setItems(itemData);
       setHistory(historyData);
-      setPayments(paymentData);
       setNextStatus(orderData?.status ?? '');
       setInternalNotes(orderData?.internal_notes ?? '');
     } catch (caught) {
@@ -116,16 +114,12 @@ export function OrderDetailPage() {
     void load();
   }, [load]);
 
-  const paid = useMemo(
-    () =>
-      payments
-        .filter((payment) => !['rejected', 'refunded'].includes(payment.status))
-        .reduce((sum, payment) => sum + toNumber(payment.amount), 0),
-    [payments],
-  );
-
+  // H-03: pagado/saldo se leen de orders.amount_paid/total_amount — la misma
+  // fuente autoritativa que usa DeliverAndPayModal, así el detalle del pedido y
+  // el listado nunca muestran cifras distintas.
+  const paid = order ? orderAmountPaid(order) : 0;
   const total = order ? orderTotal(order) : 0;
-  const balance = Math.max(0, total - paid);
+  const balance = order ? orderBalance(order) : 0;
 
   const transition = async () => {
     if (!order || !nextStatus || nextStatus === order.status) return;
@@ -246,6 +240,13 @@ export function OrderDetailPage() {
     );
 
   const isTerminal = order.status === 'cancelled' || order.status === 'returned';
+  // H-13: contabilidad y vendedor pueden pagar un pedido ya entregado desde
+  // este botón, pero ninguno de los dos puede disparar la entrega de uno que
+  // aún no lo está — se deshabilita en ese caso puntual en vez de ocultarlo,
+  // ya que sigue siendo válido una vez entregado. El modal explica el motivo
+  // si de todas formas se abre.
+  const canTriggerDeliverAndPay =
+    order.status === 'delivered' || canDeliverViaCombinedAction(access.roles);
 
   return (
     <>
@@ -267,7 +268,13 @@ export function OrderDetailPage() {
               Imprimir / PDF
             </Button>
             {!isTerminal && (
-              <Button onClick={() => setDeliverPayOpen(true)}>
+              <Button
+                onClick={() => setDeliverPayOpen(true)}
+                disabled={!canTriggerDeliverAndPay}
+                title={
+                  canTriggerDeliverAndPay ? undefined : 'Tu rol solo puede pagar pedidos ya entregados'
+                }
+              >
                 <Truck className="h-4 w-4" />
                 Entregar y pagar
               </Button>
@@ -519,7 +526,6 @@ export function OrderDetailPage() {
         <DeliverAndPayModal
           open
           order={order}
-          payments={payments}
           onClose={() => setDeliverPayOpen(false)}
           onSuccess={load}
         />

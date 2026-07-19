@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(20);
+select plan(31);
 
 select is(
   (select unit_price from public.resolve_product_price_internal(
@@ -132,6 +132,114 @@ set local role authenticated;
 select set_config('request.jwt.claims','{"role":"authenticated","sub":"99999999-9999-4999-8999-999999999998"}',true);
 select is((select count(*) from public.customers),0::bigint,'RLS oculta clientes ajenos a usuario sin rol');
 reset role;
+
+-- ---------------------------------------------------------------------------
+-- Regresión H-05 / H-13 (AUDITORIA_PREPRODUCCION_NETLIFY.md). Identidades de
+-- prueba contabilidad-only/vendedor-only, creadas y descartadas dentro de la
+-- misma transacción de la suite (rollback al final, igual que todo lo demás).
+-- ---------------------------------------------------------------------------
+insert into auth.users(id) values
+  ('90000000-0000-4000-8000-0000000000c1'),
+  ('90000000-0000-4000-8000-0000000000c2')
+on conflict (id) do nothing;
+insert into public.profiles(id, full_name) values
+  ('90000000-0000-4000-8000-0000000000c1', '[TEST] Contabilidad only'),
+  ('90000000-0000-4000-8000-0000000000c2', '[TEST] Vendedor only')
+on conflict (id) do nothing;
+insert into public.user_roles(profile_id, role_id) values
+  ('90000000-0000-4000-8000-0000000000c1', '10000000-0000-4000-8000-000000000005'), -- contabilidad
+  ('90000000-0000-4000-8000-0000000000c2', '10000000-0000-4000-8000-000000000003') -- vendedor
+on conflict do nothing;
+
+select set_config('request.jwt.claims','{"role":"service_role"}',true);
+select lives_ok(
+  $$select public.create_order(
+    '{"customer":{"name":"H05H13 Test","phone":"573009999992"},"delivery_address":"Calle 88 # 1-01","delivery_method_id":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1","payment_method_id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1","items":[{"product_id":"11111111-1111-4111-8111-111111111111","quantity":6}]}'::jsonb,
+    '90000000-0000-4000-8000-0000000000e1',null,'{}'::jsonb
+  )$$,
+  'H-05/H-13: pedido de prueba se crea correctamente'
+);
+
+select set_config('request.jwt.claims','{"role":"authenticated","sub":"10000000-0000-4000-8000-000000000010"}',true);
+select lives_ok(
+  $$select public.register_payment(
+    (select id from public.orders where idempotency_key='90000000-0000-4000-8000-0000000000e1'),
+    30000,'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'::uuid,null,null,'abono 1',
+    'approved'::public.payment_record_status,null,'90000000-0000-4000-8000-0000000000f1'::uuid
+  )$$,
+  'H-05a: primer register_payment con una llave de idempotencia nueva funciona'
+);
+select lives_ok(
+  $$select public.register_payment(
+    (select id from public.orders where idempotency_key='90000000-0000-4000-8000-0000000000e1'),
+    30000,'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'::uuid,null,null,'abono 1 retry',
+    'approved'::public.payment_record_status,null,'90000000-0000-4000-8000-0000000000f1'::uuid
+  )$$,
+  'H-05a: reintento con la MISMA llave no lanza error'
+);
+select is(
+  (select count(*) from public.payments where idempotency_key='90000000-0000-4000-8000-0000000000f1'::uuid),
+  1::bigint, 'H-05a: el reintento con la misma llave NO duplica el pago'
+);
+select throws_ok(
+  $$select public.register_payment(
+    (select id from public.orders where idempotency_key='90000000-0000-4000-8000-0000000000e1'),
+    99999,'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'::uuid,null,null,'monto distinto',
+    'approved'::public.payment_record_status,null,'90000000-0000-4000-8000-0000000000f1'::uuid
+  )$$,
+  'P0001','IDEMPOTENCY_KEY_REUSED: Esta llave de idempotencia ya se usó con un monto o método distinto',
+  'H-05b: reusar la llave con un monto distinto se rechaza con un error funcional claro'
+);
+select throws_ok(
+  $$select public.register_payment(
+    (select id from public.orders where idempotency_key='90000000-0000-4000-8000-0000000000e1'),
+    999999999,'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'::uuid,null,null,'overpay',
+    'approved'::public.payment_record_status,null,gen_random_uuid()
+  )$$,
+  'P0001', null,
+  'H-05c: un pago que supera el saldo pendiente sigue siendo rechazado'
+);
+
+select throws_ok(
+  $$select public.deliver_and_pay_order(
+    (select id from public.orders where idempotency_key='90000000-0000-4000-8000-0000000000e1'),
+    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'::uuid,null,null,'contabilidad intenta entregar',gen_random_uuid()
+  )$$,
+  'P0001', null,
+  'H-13: contabilidad-only NO puede disparar el paso de entrega de un pedido no entregado'
+);
+
+select set_config('request.jwt.claims','{"role":"authenticated","sub":"90000000-0000-4000-8000-0000000000c2"}',true);
+select throws_ok(
+  $$select public.deliver_and_pay_order(
+    (select id from public.orders where idempotency_key='90000000-0000-4000-8000-0000000000e1'),
+    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'::uuid,null,null,'vendedor intenta entregar',gen_random_uuid()
+  )$$,
+  'P0001', null,
+  'H-13: vendedor-only tampoco puede disparar el paso de entrega (transition_order_status ya lo bloquea)'
+);
+
+select set_config('request.jwt.claims','{"role":"authenticated","sub":"10000000-0000-4000-8000-000000000010"}',true);
+select lives_ok(
+  $$select public.deliver_and_pay_order(
+    (select id from public.orders where idempotency_key='90000000-0000-4000-8000-0000000000e1'),
+    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'::uuid,null,null,'superadmin entrega y paga',gen_random_uuid()
+  )$$,
+  'H-13: superadmin sí puede entregar y pagar'
+);
+select is(
+  (select status::text from public.orders where idempotency_key='90000000-0000-4000-8000-0000000000e1'),
+  'delivered', 'H-13: el pedido queda entregado tras la acción del superadmin'
+);
+
+select set_config('request.jwt.claims','{"role":"authenticated","sub":"90000000-0000-4000-8000-0000000000c1"}',true);
+select lives_ok(
+  $$select public.deliver_and_pay_order(
+    (select id from public.orders where idempotency_key='90000000-0000-4000-8000-0000000000e1'),
+    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'::uuid,null,null,'contabilidad paga pedido ya entregado',gen_random_uuid()
+  )$$,
+  'H-13: contabilidad SÍ puede usar la acción combinada sobre un pedido ya entregado (solo paga)'
+);
 
 select * from finish();
 rollback;

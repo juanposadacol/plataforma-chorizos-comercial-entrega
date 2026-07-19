@@ -45,6 +45,41 @@ export const formatAdminDate = (value: unknown, includeTime = false): string => 
   }).format(date);
 };
 
+/**
+ * Role decisions for the "deliver and pay" combined action (H-13).
+ *
+ * Mirrors, on purpose, the role checks enforced server-side in
+ * supabase/migrations/202607190002_fix_payment_idempotency_and_role_checks.sql
+ * and 202607180004_admin_flexible_transitions.sql:
+ *   - transition_order_status (the "deliver" step) accepts superadmin/admin/
+ *     vendedor/bodega at the entry gate, but a finer-grained rule further down
+ *     blocks a pure `vendedor` (without also holding `bodega`) from ever
+ *     reaching a status past 'confirmed' — so in practice only superadmin,
+ *     admin, and bodega can actually move an order to 'delivered'. Confirmed
+ *     live with a ROLLBACK-wrapped test: a vendedor-only session got
+ *     "El vendedor no puede realizar esta transición" trying to reach it.
+ *   - register_payment (the "pay" step) accepts:
+ *       superadmin, admin, vendedor, contabilidad
+ *   - deliver_and_pay_order accepts the same callers as register_payment
+ *     (superadmin, admin, vendedor, contabilidad — bodega is intentionally
+ *     excluded from money-handling actions altogether), but only triggers the
+ *     delivery step for superadmin/admin — neither contabilidad nor vendedor
+ *     may use it to deliver an order, only to pay one that is ALREADY
+ *     delivered by someone else.
+ *
+ * This is UI convenience only (server-side RLS/role checks remain the real
+ * boundary) — its purpose is to keep the button's visibility honest so staff
+ * aren't offered an action the server will reject.
+ */
+export const PAYMENT_ROLES = ['superadmin', 'admin', 'vendedor', 'contabilidad'] as const;
+
+export const hasAnyRole = (roles: string[], allowed: readonly string[]): boolean =>
+  roles.some((role) => allowed.includes(role));
+
+/** Can this set of roles trigger the delivery step of deliver_and_pay_order? */
+export const canDeliverViaCombinedAction = (roles: string[]): boolean =>
+  hasAnyRole(roles, ['superadmin', 'admin']);
+
 export const orderStatusLabels: Record<string, string> = {
   new: 'Nuevo',
   pending_confirmation: 'Por confirmar',

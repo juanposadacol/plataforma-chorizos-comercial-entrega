@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { CheckCircle2, Plus, Save } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import type { AdminOrder, Payment } from '../../features/admin/types';
-import { orderTotal } from '../../features/admin/types';
+import { orderAmountPaid, orderBalance, orderTotal } from '../../features/admin/types';
 import { invokeAdminRpc } from '../../features/admin/adminService';
 import { useAdminData } from '../../features/admin/useAdminData';
 import { usePaymentMethods } from '../../features/admin/usePaymentMethods';
@@ -75,11 +75,18 @@ export function PaymentsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  // H-05: llave de idempotencia estable por intento de pago en curso. Se
+  // regenera únicamente al iniciar una operación nueva (abrir el modal, cambiar
+  // de pedido, tras confirmar con éxito, o al cancelar) — nunca por un reintento
+  // tras timeout o error desconocido, para que register_payment pueda deduplicar
+  // un reintento real en vez de crear un segundo pago.
+  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
 
   useEffect(() => {
     const orderId = params.get('pedido');
     if (orderId) {
       setForm((current) => ({ ...current, order_id: orderId }));
+      setIdempotencyKey(crypto.randomUUID());
       setModalOpen(true);
     }
   }, [params]);
@@ -110,13 +117,11 @@ export function PaymentsPage() {
   const selectedOrder = orderById.get(form.order_id);
   // form.method stores the UUID; fall back to the first loaded method when empty.
   const resolvedMethodId = form.method || (paymentMethods[0]?.id ?? '');
-  const orderPayments = paymentsState.data
-    .filter(
-      (payment) =>
-        payment.order_id === form.order_id && !['rejected', 'refunded'].includes(payment.status),
-    )
-    .reduce((sum, payment) => sum + toNumber(payment.amount), 0);
-  const orderBalance = Math.max(0, (selectedOrder ? orderTotal(selectedOrder) : 0) - orderPayments);
+  // H-03: la misma fuente autoritativa (orders.amount_paid/total_amount) que usa
+  // DeliverAndPayModal y el detalle del pedido — nunca se re-deriva sumando el
+  // array de pagos local (ese cálculo contaba estados como 'pending' como pagados).
+  const selectedOrderPaid = selectedOrder ? orderAmountPaid(selectedOrder) : 0;
+  const selectedOrderBalance = selectedOrder ? orderBalance(selectedOrder) : 0;
   const totalCollected = paymentsState.data
     .filter((payment) => !['rejected', 'refunded'].includes(payment.status))
     .reduce((sum, payment) => sum + toNumber(payment.amount), 0);
@@ -130,18 +135,31 @@ export function PaymentsPage() {
 
   // Pre-fill amount with current balance when an order is selected and the field is still empty.
   useEffect(() => {
-    if (form.order_id && form.amount === '' && orderBalance > 0) {
-      setForm((current) => ({ ...current, amount: String(Math.round(orderBalance)) }));
+    if (form.order_id && form.amount === '' && selectedOrderBalance > 0) {
+      setForm((current) => ({ ...current, amount: String(Math.round(selectedOrderBalance)) }));
     }
-  }, [form.order_id, form.amount, orderBalance]);
+  }, [form.order_id, form.amount, selectedOrderBalance]);
 
   const openCreate = () => {
     setForm({ order_id: '', amount: '', method: paymentMethods[0]?.id ?? '', reference: '', notes: '' });
+    setIdempotencyKey(crypto.randomUUID());
     setError(null);
     setModalOpen(true);
   };
+  const closeModal = () => {
+    setModalOpen(false);
+    setIdempotencyKey(crypto.randomUUID());
+  };
+  const selectOrder = (orderId: string) => {
+    setForm((current) => ({ ...current, order_id: orderId, amount: '' }));
+    // Changing the order starts a new payment intent — a fresh key prevents a
+    // leftover key from an aborted attempt on a different order from ever being
+    // reused here.
+    setIdempotencyKey(crypto.randomUUID());
+  };
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    if (saving) return; // Guardia extra contra doble envío por reentrancia.
     setSaving(true);
     setError(null);
     try {
@@ -151,12 +169,16 @@ export function PaymentsPage() {
         p_payment_method_id: resolvedMethodId,
         p_reference: form.reference || null,
         p_notes: form.notes || null,
+        p_idempotency_key: idempotencyKey,
       });
       setModalOpen(false);
+      setIdempotencyKey(crypto.randomUUID());
       setSuccess('Pago registrado y saldo actualizado.');
       window.setTimeout(() => setSuccess(null), 4000);
       await Promise.all([paymentsState.reload(), ordersState.reload(), receivablesState.reload()]);
     } catch (caught) {
+      // No se regenera idempotencyKey aquí: un reintento debe reutilizar la
+      // misma llave para que el servidor lo trate como el mismo intento.
       setError(caught instanceof Error ? caught.message : 'No fue posible registrar el pago.');
     } finally {
       setSaving(false);
@@ -389,7 +411,7 @@ export function PaymentsPage() {
         open={modalOpen}
         title="Registrar pago"
         description="El servidor actualiza el estado del pedido y la cuenta por cobrar de forma consistente."
-        onClose={() => !saving && setModalOpen(false)}
+        onClose={() => !saving && closeModal()}
       >
         <form onSubmit={submit} className="space-y-4">
           <label>
@@ -398,9 +420,7 @@ export function PaymentsPage() {
               required
               className={inputClass}
               value={form.order_id}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, order_id: event.target.value }))
-              }
+              onChange={(event) => selectOrder(event.target.value)}
             >
               <option value="">Selecciona un pedido</option>
               {ordersState.data
@@ -421,8 +441,14 @@ export function PaymentsPage() {
                 <p className="mt-1 font-black">{formatMoney(orderTotal(selectedOrder))}</p>
               </div>
               <div>
+                <p className="text-xs font-bold uppercase text-artisan-muted">Ya pagado</p>
+                <p className="mt-1 font-semibold text-emerald-700">
+                  {formatMoney(selectedOrderPaid)}
+                </p>
+              </div>
+              <div className="col-span-2">
                 <p className="text-xs font-bold uppercase text-artisan-muted">Saldo</p>
-                <p className="mt-1 font-black text-wine">{formatMoney(orderBalance)}</p>
+                <p className="mt-1 font-black text-wine">{formatMoney(selectedOrderBalance)}</p>
               </div>
             </div>
           )}
@@ -432,7 +458,7 @@ export function PaymentsPage() {
               required
               type="number"
               min="1"
-              max={orderBalance || undefined}
+              max={selectedOrderBalance || undefined}
               step="1"
               className={inputClass}
               value={form.amount}
@@ -484,7 +510,7 @@ export function PaymentsPage() {
           </label>
           {error && <div className="rounded-xl bg-red-50 p-3 text-sm text-red-800">{error}</div>}
           <div className="flex justify-end gap-2 border-t border-artisan-line pt-4">
-            <Button type="button" variant="secondary" onClick={() => setModalOpen(false)}>
+            <Button type="button" variant="secondary" onClick={closeModal} disabled={saving}>
               Cancelar
             </Button>
             <Button type="submit" disabled={saving || !selectedOrder}>

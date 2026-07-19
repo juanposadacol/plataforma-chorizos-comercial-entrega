@@ -378,3 +378,22 @@ export const orderDiscount = (order: AdminOrder): number =>
 
 export const itemSubtotal = (item: AdminOrderItem): number =>
   (item.subtotal_amount ?? item.subtotal ?? 0) as number;
+
+/**
+ * Single source of truth for "how much has this order collected so far."
+ * `orders.amount_paid` is recomputed server-side from `sum(payments.amount)
+ * where status='approved'` on every register_payment/deliver_and_pay_order call
+ * (see supabase/migrations/202607180005_fix_register_payment_enum_cast.sql), so it
+ * is always authoritative — never re-derive this by summing a locally-fetched
+ * payments array (that was the root cause of H-03: a stale/empty/mis-filtered
+ * payments list showing the wrong balance in DeliverAndPayModal/PaymentsPage).
+ */
+export const orderAmountPaid = (order: AdminOrder): number => toNumberField(order.amount_paid);
+
+export const orderBalance = (order: AdminOrder): number =>
+  Math.max(0, orderTotal(order) - orderAmountPaid(order));
+
+function toNumberField(value: unknown): number {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}

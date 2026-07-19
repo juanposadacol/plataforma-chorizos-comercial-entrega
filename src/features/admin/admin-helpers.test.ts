@@ -1,12 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import {
   itemSubtotal,
+  orderAmountPaid,
+  orderBalance,
   orderDeliveryFee,
   orderDiscount,
   orderSubtotal,
   orderTotal,
 } from './types';
-import { formatAdminDate, isBareSqlDate, percentChange, percentage, sumStatusCounts } from './utils';
+import {
+  canDeliverViaCombinedAction,
+  formatAdminDate,
+  isBareSqlDate,
+  percentChange,
+  percentage,
+  sumStatusCounts,
+} from './utils';
 
 // Helpers de resolución de columnas: la BD usa nombres snake_case distintos
 // al código anterior (total_amount ≠ total, subtotal_amount ≠ subtotal, etc.).
@@ -28,6 +37,45 @@ describe('orderTotal — resolución de total del pedido', () => {
 
   it('devuelve 0 cuando total_amount es null/undefined', () =>
     expect(orderTotal({ total_amount: null, total: undefined } as never)).toBe(0));
+});
+
+// Regresión H-03: DeliverAndPayModal (abierto desde OrdersTable) y PaymentsPage
+// calculaban "pagado" sumando un array de pagos que a veces llegaba vacío
+// (OrdersTable pasaba `payments={[]}`) o con un filtro de estado distinto al de
+// la RPC (algunos sitios contaban 'pending'/'under_review' como pagado). La única
+// fuente de verdad es `orders.amount_paid`, que register_payment/deliver_and_pay_order
+// recalculan siempre a partir de los pagos 'approved' — nunca debe re-derivarse
+// sumando un array local.
+describe('orderAmountPaid / orderBalance — fuente única de verdad para el saldo', () => {
+  it('total $120.000 y pagado $0 → saldo $120.000', () => {
+    const order = { total_amount: 120000, amount_paid: 0 } as never;
+    expect(orderAmountPaid(order)).toBe(0);
+    expect(orderBalance(order)).toBe(120000);
+  });
+
+  it('total $120.000 y pagado $50.000 → saldo $70.000', () => {
+    const order = { total_amount: 120000, amount_paid: 50000 } as never;
+    expect(orderAmountPaid(order)).toBe(50000);
+    expect(orderBalance(order)).toBe(70000);
+  });
+
+  it('total $120.000 y pagado $120.000 → saldo $0', () => {
+    const order = { total_amount: 120000, amount_paid: 120000 } as never;
+    expect(orderAmountPaid(order)).toBe(120000);
+    expect(orderBalance(order)).toBe(0);
+  });
+
+  it('amount_paid ausente se trata como 0, no como error', () =>
+    expect(orderBalance({ total_amount: 120000 } as never)).toBe(120000));
+
+  it('el saldo nunca es negativo aunque amount_paid supere el total (dato inconsistente)', () =>
+    expect(orderBalance({ total_amount: 120000, amount_paid: 150000 } as never)).toBe(0));
+
+  it('PED-00000001: total $120.000, pagado $120.000 → saldo $0 (verificado en producción)', () => {
+    const ped1 = { total_amount: 120000, amount_paid: 120000 } as never;
+    expect(orderAmountPaid(ped1)).toBe(120000);
+    expect(orderBalance(ped1)).toBe(0);
+  });
 });
 
 describe('orderSubtotal — resolución de subtotal', () => {
@@ -249,4 +297,31 @@ describe('formatAdminDate — no desplaza columnas DATE al convertir a Bogotá',
     expect(formatAdminDate(undefined)).toBe('—');
     expect(formatAdminDate('')).toBe('—');
   });
+});
+
+// Regresión H-13: deliver_and_pay_order aceptaba los roles contabilidad y
+// vendedor, pero delegaba en transition_order_status, que no acepta
+// contabilidad y — descubierto con una prueba en vivo envuelta en ROLLBACK
+// contra el proyecto enlazado — tampoco deja a un vendedor puro avanzar más
+// allá de 'confirmed' (solo si además tiene el rol bodega). Ninguno de los dos
+// podía entonces entregar un pedido nuevo a través de "Entregar y pagar",
+// aunque el servidor los dejaba intentarlo. canDeliverViaCombinedAction() es
+// el mismo criterio que ahora aplica el servidor (ver la migración de este
+// hallazgo) para decidir si el paso de entrega del botón combinado debe
+// habilitarse en el cliente: solo superadmin/admin.
+describe('canDeliverViaCombinedAction — alineación de roles con el servidor (H-13)', () => {
+  it('superadmin puede entregar', () => expect(canDeliverViaCombinedAction(['superadmin'])).toBe(true));
+  it('admin puede entregar', () => expect(canDeliverViaCombinedAction(['admin'])).toBe(true));
+  it('vendedor por sí solo NO puede disparar el paso de entrega (verificado en vivo)', () =>
+    expect(canDeliverViaCombinedAction(['vendedor'])).toBe(false));
+  it('bodega NO puede usar la acción combinada (no maneja pagos)', () =>
+    expect(canDeliverViaCombinedAction(['bodega'])).toBe(false));
+  it('contabilidad por sí sola NO puede disparar el paso de entrega', () =>
+    expect(canDeliverViaCombinedAction(['contabilidad'])).toBe(false));
+  it('un usuario autenticado sin rol de staff no puede entregar', () =>
+    expect(canDeliverViaCombinedAction([])).toBe(false));
+  it('contabilidad + vendedor (multi-rol) tampoco puede: ninguno de los dos entrega', () =>
+    expect(canDeliverViaCombinedAction(['contabilidad', 'vendedor'])).toBe(false));
+  it('admin + vendedor (multi-rol) sí puede, por el rol admin', () =>
+    expect(canDeliverViaCombinedAction(['admin', 'vendedor'])).toBe(true));
 });

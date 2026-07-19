@@ -63,6 +63,20 @@ const SettingsPage = lazy(() =>
   import('./pages/admin/SettingsPage').then((m) => ({ default: m.SettingsPage })),
 );
 
+// H-14: cada ruta pública se envuelve en su propio ErrorBoundary (en vez de uno
+// compartido para toda la app) para que un error de renderizado en una ruta no
+// deje las demás inutilizables — react-router desmonta el <Route element> de la
+// ruta anterior y monta uno nuevo (con su propio ErrorBoundary, en estado limpio)
+// al navegar, así que "Volver a la tienda" o cualquier otra navegación siempre
+// funciona incluso si otra ruta quedó en estado de error.
+const publicErrorBoundaryProps = {
+  title: 'Ocurrió un error inesperado',
+  description:
+    'No pudimos mostrar esta página. Puedes intentarlo de nuevo o volver a la tienda.',
+  backHref: '/',
+  backLabel: 'Volver a la tienda',
+};
+
 export function App() {
   return (
     <Suspense
@@ -73,14 +87,70 @@ export function App() {
       }
     >
       <Routes>
-        <Route path="/" element={<StorefrontPage />} />
-        <Route path="/pedido-confirmado" element={<OrderConfirmationPage />} />
-        <Route path="/seguir" element={<OrderTrackingPage />} />
-        <Route path="/seguir/:token" element={<OrderTrackingPage />} />
-        <Route path="/mis-pedidos" element={<CustomerOrdersPage />} />
-        <Route path="/privacidad" element={<LegalPage />} />
-        <Route path="/terminos" element={<LegalPage />} />
-        <Route path="/admin/acceso" element={<AdminLoginPage />} />
+        <Route
+          path="/"
+          element={
+            <ErrorBoundary {...publicErrorBoundaryProps}>
+              <StorefrontPage />
+            </ErrorBoundary>
+          }
+        />
+        <Route
+          path="/pedido-confirmado"
+          element={
+            <ErrorBoundary {...publicErrorBoundaryProps}>
+              <OrderConfirmationPage />
+            </ErrorBoundary>
+          }
+        />
+        <Route
+          path="/seguir"
+          element={
+            <ErrorBoundary {...publicErrorBoundaryProps}>
+              <OrderTrackingPage />
+            </ErrorBoundary>
+          }
+        />
+        <Route
+          path="/seguir/:token"
+          element={
+            <ErrorBoundary {...publicErrorBoundaryProps}>
+              <OrderTrackingPage />
+            </ErrorBoundary>
+          }
+        />
+        <Route
+          path="/mis-pedidos"
+          element={
+            <ErrorBoundary {...publicErrorBoundaryProps}>
+              <CustomerOrdersPage />
+            </ErrorBoundary>
+          }
+        />
+        <Route
+          path="/privacidad"
+          element={
+            <ErrorBoundary {...publicErrorBoundaryProps}>
+              <LegalPage />
+            </ErrorBoundary>
+          }
+        />
+        <Route
+          path="/terminos"
+          element={
+            <ErrorBoundary {...publicErrorBoundaryProps}>
+              <LegalPage />
+            </ErrorBoundary>
+          }
+        />
+        <Route
+          path="/admin/acceso"
+          element={
+            <ErrorBoundary {...publicErrorBoundaryProps}>
+              <AdminLoginPage />
+            </ErrorBoundary>
+          }
+        />
         <Route path="/admin/login" element={<Navigate to="/admin/acceso" replace />} />
         <Route element={<AdminGuard />}>
           <Route path="/admin" element={<ErrorBoundary><AdminLayout /></ErrorBoundary>}>
