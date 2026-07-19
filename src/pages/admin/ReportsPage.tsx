@@ -4,7 +4,13 @@ import { Download, FileSpreadsheet, FileText, Play } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { exportCsv, exportExcel, exportPdf, type ExportRow } from '../../lib/export';
 import { fetchRecords, invokeAdminRpc } from '../../features/admin/adminService';
-import { formatAdminDate, formatMoney, toNumber } from '../../features/admin/utils';
+import {
+  formatAdminDate,
+  formatMoney,
+  getBogotaDateString,
+  toNumber,
+} from '../../features/admin/utils';
+import { formatBogotaDateParts, getBogotaDateParts } from '../../lib/format';
 import {
   Button,
   EmptyState,
@@ -124,17 +130,14 @@ const primitiveRows = (data: unknown): ExportRow[] => {
     ),
   );
 };
-const dateParams = (from: string, to: string) => ({
-  p_from: `${from}T00:00:00-05:00`,
-  p_to: `${to}T23:59:59-05:00`,
-});
+const dateParams = (from: string, to: string) => ({ p_from: from, p_to: to });
 
 export function ReportsPage() {
-  const monthStart = new Date();
-  monthStart.setDate(1);
+  const todayBogota = getBogotaDateParts();
+  const monthStartBogota = formatBogotaDateParts({ ...todayBogota, day: 1 });
   const [reportId, setReportId] = useState<ReportId>('sales_day');
-  const [from, setFrom] = useState(monthStart.toISOString().slice(0, 10));
-  const [to, setTo] = useState(new Date().toISOString().slice(0, 10));
+  const [from, setFrom] = useState(monthStartBogota);
+  const [to, setTo] = useState(getBogotaDateString());
   const [rows, setRows] = useState<ExportRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

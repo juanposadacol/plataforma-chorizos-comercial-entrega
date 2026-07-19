@@ -284,6 +284,79 @@ export interface DashboardSnapshot {
   notifications: AdminNotification[];
 }
 
+/**
+ * Shape returned by the `get_dashboard_metrics` RPC — the single source of truth
+ * for dashboard headline figures. All money/date logic lives in SQL (America/Bogota)
+ * so the dashboard and the reports page never diverge on business definitions.
+ */
+export interface DashboardMetricsSummary {
+  from: string;
+  to: string;
+  sales_today: number;
+  sales_yesterday: number;
+  sales_current_week: number;
+  sales_current_month: number;
+  net_sales: number;
+  sales_cost: number;
+  gross_profit: number;
+  operating_expenses: number;
+  net_profit: number;
+  gross_margin: number;
+  delivered_orders: number;
+  average_ticket: number;
+  units_sold: number;
+  collected: number;
+  accounts_receivable: number;
+  accounts_payable: number;
+  inventory_value: number;
+  new_customers: number;
+  low_stock_products: number;
+  pending_notifications: number;
+  new_orders: number;
+  order_status_counts: Record<string, number>;
+}
+
+export interface SalesByDayRow {
+  sale_date: string;
+  delivered_orders: number;
+  units_sold: number;
+  net_sales: number;
+  sales_cost: number;
+  gross_profit: number;
+  gross_margin: number;
+}
+
+export interface ProductRankingRow {
+  product_id: string;
+  sku: string;
+  product_name: string;
+  units_sold: number;
+  order_count: number;
+  net_sales: number;
+  sales_cost: number;
+  gross_profit: number;
+  gross_margin: number;
+}
+
+export interface CustomerRankingRow {
+  customer_id: string;
+  customer_name: string;
+  order_count: number;
+  net_sales: number;
+  total_paid: number;
+  average_ticket: number;
+  last_purchase_at: string | null;
+}
+
+export interface SalesBreakdownRow {
+  dimension_key: string;
+  dimension_label: string;
+  order_count: number;
+  units_sold: number;
+  net_sales: number;
+  gross_profit: number;
+}
+
 export interface DateRange {
   from: Date;
   to: Date;

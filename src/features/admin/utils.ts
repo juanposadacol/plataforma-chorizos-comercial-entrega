@@ -1,7 +1,16 @@
-import { formatMoney } from '../../lib/format';
+import {
+  addBogotaDays,
+  bogotaEndOfDay,
+  bogotaMondayIndex,
+  bogotaStartOfDay,
+  formatMoney,
+  getBogotaDateParts,
+  getBogotaDateString,
+  lastDayOfBogotaMonth,
+} from '../../lib/format';
 import type { DateRange, OrderStatus, PaymentStatus } from './types';
 
-export { formatMoney };
+export { formatMoney, getBogotaDateString };
 
 export const toNumber = (value: unknown): number => {
   const parsed = Number(value ?? 0);
@@ -65,59 +74,64 @@ export const getStatusTone = (status: string): StatusTone => {
   return 'gray';
 };
 
-const startOfDay = (date: Date) => {
-  const result = new Date(date);
-  result.setHours(0, 0, 0, 0);
-  return result;
-};
-
-const endOfDay = (date: Date) => {
-  const result = new Date(date);
-  result.setHours(23, 59, 59, 999);
-  return result;
-};
-
 export type RangePreset =
   'today' | 'yesterday' | '7days' | 'week' | 'lastWeek' | 'month' | 'lastMonth' | 'year';
 
-export const getDateRange = (preset: RangePreset): DateRange => {
-  const today = new Date();
-  const from = startOfDay(today);
-  const to = endOfDay(today);
+/**
+ * Computes UI date-range presets anchored to the current calendar day in
+ * America/Bogota — never the browser/OS local timezone. `reference` defaults to
+ * "now" but can be overridden in tests to pin a deterministic instant.
+ */
+export const getDateRange = (preset: RangePreset, reference: Date = new Date()): DateRange => {
+  const todayParts = getBogotaDateParts(reference);
+  const today = { from: bogotaStartOfDay(todayParts), to: bogotaEndOfDay(todayParts) };
+
   if (preset === 'yesterday') {
-    from.setDate(from.getDate() - 1);
-    to.setDate(to.getDate() - 1);
-    return { from, to, label: 'Ayer' };
+    const parts = addBogotaDays(todayParts, -1);
+    return { from: bogotaStartOfDay(parts), to: bogotaEndOfDay(parts), label: 'Ayer' };
   }
   if (preset === '7days') {
-    from.setDate(from.getDate() - 6);
-    return { from, to, label: 'Últimos 7 días' };
+    const fromParts = addBogotaDays(todayParts, -6);
+    return { from: bogotaStartOfDay(fromParts), to: today.to, label: 'Últimos 7 días' };
   }
   if (preset === 'week' || preset === 'lastWeek') {
-    const weekday = (from.getDay() + 6) % 7;
-    from.setDate(from.getDate() - weekday + (preset === 'lastWeek' ? -7 : 0));
+    let fromParts = addBogotaDays(todayParts, -bogotaMondayIndex(todayParts));
+    let toParts = todayParts;
     if (preset === 'lastWeek') {
-      to.setTime(from.getTime());
-      to.setDate(to.getDate() + 6);
-      to.setHours(23, 59, 59, 999);
+      fromParts = addBogotaDays(fromParts, -7);
+      toParts = addBogotaDays(fromParts, 6);
     }
-    return { from, to, label: preset === 'week' ? 'Semana actual' : 'Semana anterior' };
+    return {
+      from: bogotaStartOfDay(fromParts),
+      to: bogotaEndOfDay(toParts),
+      label: preset === 'week' ? 'Semana actual' : 'Semana anterior',
+    };
   }
   if (preset === 'month' || preset === 'lastMonth') {
+    let { year, month } = todayParts;
+    let toParts = todayParts;
     if (preset === 'lastMonth') {
-      from.setMonth(from.getMonth() - 1, 1);
-      to.setDate(0);
-      to.setHours(23, 59, 59, 999);
-    } else {
-      from.setDate(1);
+      month -= 1;
+      if (month === 0) {
+        month = 12;
+        year -= 1;
+      }
+      toParts = { year, month, day: lastDayOfBogotaMonth(year, month) };
     }
-    return { from, to, label: preset === 'month' ? 'Mes actual' : 'Mes anterior' };
+    return {
+      from: bogotaStartOfDay({ year, month, day: 1 }),
+      to: bogotaEndOfDay(toParts),
+      label: preset === 'month' ? 'Mes actual' : 'Mes anterior',
+    };
   }
   if (preset === 'year') {
-    from.setMonth(0, 1);
-    return { from, to, label: 'Año actual' };
+    return {
+      from: bogotaStartOfDay({ year: todayParts.year, month: 1, day: 1 }),
+      to: today.to,
+      label: 'Año actual',
+    };
   }
-  return { from, to, label: 'Hoy' };
+  return { from: today.from, to: today.to, label: 'Hoy' };
 };
 
 export const downloadCsv = (filename: string, rows: Record<string, unknown>[]): void => {
@@ -143,6 +157,14 @@ export const downloadCsv = (filename: string, rows: Record<string, unknown>[]): 
 
 export const percentage = (part: number, total: number): number =>
   total > 0 ? (part / total) * 100 : 0;
+
+/** Percentage change vs. a previous value, null when there is nothing to compare against. */
+export const percentChange = (current: number, previous: number): number | null =>
+  previous > 0 ? ((current - previous) / previous) * 100 : current > 0 ? 100 : null;
+
+/** Sums selected keys out of the dashboard RPC's order_status_counts jsonb map. */
+export const sumStatusCounts = (counts: Record<string, number>, ...statuses: string[]): number =>
+  statuses.reduce((sum, status) => sum + toNumber(counts[status]), 0);
 
 export const matchesSearch = (record: Record<string, unknown>, search: string): boolean => {
   const query = search.trim().toLocaleLowerCase('es');

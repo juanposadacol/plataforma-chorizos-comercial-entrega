@@ -1,5 +1,5 @@
 import { isSupabaseConfigured, supabase } from '../../lib/supabase';
-import type { DashboardSnapshot } from './types';
+import type { DashboardMetricsSummary, DashboardSnapshot } from './types';
 
 export class AdminConfigurationError extends Error {
   constructor() {
@@ -140,6 +140,19 @@ export async function getDashboardSnapshot(from: Date, to: Date): Promise<Dashbo
     payments,
     notifications,
   } as DashboardSnapshot;
+}
+
+/**
+ * Canonical business-metrics snapshot (sales, costs, profit, receivables, inventory
+ * value...) computed server-side in America/Bogota by `get_dashboard_metrics`. The
+ * dashboard and the reports page both read from this single RPC so their numbers
+ * never diverge.
+ */
+export async function getDashboardMetrics(from: Date, to: Date): Promise<DashboardMetricsSummary> {
+  return invokeAdminRpc<DashboardMetricsSummary>('get_dashboard_metrics', {
+    p_from: from.toISOString(),
+    p_to: to.toISOString(),
+  });
 }
 
 export async function signOutAdmin(): Promise<void> {

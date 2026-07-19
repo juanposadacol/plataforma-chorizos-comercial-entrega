@@ -3,8 +3,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, KeyRound, ShoppingCart, Tag } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
 import { fetchRecord, fetchRecords, invokeAdminRpc } from '../../features/admin/adminService';
-import type { AdminOrder, Customer, CustomerProductPrice } from '../../features/admin/types';
-import { firstText, formatAdminDate, formatMoney, toNumber } from '../../features/admin/utils';
+import { orderTotal, type AdminOrder, type Customer, type CustomerProductPrice } from '../../features/admin/types';
+import { firstText, formatAdminDate, formatMoney } from '../../features/admin/utils';
 import {
   Button,
   DataTable,
@@ -63,7 +63,7 @@ export function CustomerDetailPage() {
     () =>
       orders
         .filter((order) => !['cancelled', 'returned'].includes(order.status))
-        .reduce((sum, order) => sum + toNumber(order.total), 0),
+        .reduce((sum, order) => sum + orderTotal(order), 0),
     [orders],
   );
   const resetPin = async () => {
@@ -103,7 +103,7 @@ export function CustomerDetailPage() {
     {
       key: 'total',
       header: 'Total',
-      render: (order) => <span className="font-black">{formatMoney(order.total)}</span>,
+      render: (order) => <span className="font-black">{formatMoney(orderTotal(order))}</span>,
     },
   ];
   if (loading)

@@ -6,6 +6,7 @@ import {
   orderSubtotal,
   orderTotal,
 } from './types';
+import { percentChange, percentage, sumStatusCounts } from './utils';
 
 // Helpers de resolución de columnas: la BD usa nombres snake_case distintos
 // al código anterior (total_amount ≠ total, subtotal_amount ≠ subtotal, etc.).
@@ -157,4 +158,50 @@ describe('mapeo de métodos de pago — regresión códigos inglés vs español'
     expect('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1').toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
     ));
+});
+
+// Regresión para el bug de estadísticas del tablero: "ventas de hoy/ayer/semana/mes"
+// y "ticket promedio" mostraban $0 porque el cliente leía `order.total` (columna
+// inexistente) y agregaba pedidos sin filtrar por estado "entregado" ni por fecha
+// comercial en América/Bogota. El tablero ahora consume directamente los campos de
+// `get_dashboard_metrics` (RPC), así que estas pruebas cubren los agregadores
+// puros que sí siguen viviendo en el cliente.
+describe('sumStatusCounts — agrega conteos por estado desde order_status_counts', () => {
+  it('suma varios estados presentes', () =>
+    expect(sumStatusCounts({ pending_confirmation: 2, confirmed: 3, delivered: 1 }, 'pending_confirmation', 'confirmed')).toBe(5));
+
+  it('trata estados ausentes como 0 en vez de fallar', () =>
+    expect(sumStatusCounts({ delivered: 1 }, 'preparing')).toBe(0));
+
+  it('objeto vacío no rompe la suma', () => expect(sumStatusCounts({}, 'new')).toBe(0));
+});
+
+describe('percentChange / percentage — división por cero segura', () => {
+  it('no lanza error ni devuelve Infinity cuando el valor previo es 0', () =>
+    expect(percentChange(120000, 0)).toBe(100));
+
+  it('devuelve null cuando ambos valores son 0 (nada que comparar)', () =>
+    expect(percentChange(0, 0)).toBeNull());
+
+  it('calcula el cambio porcentual normal', () => expect(percentChange(150, 100)).toBe(50));
+
+  it('percentage() no divide por cero cuando el total es 0', () =>
+    expect(percentage(40000, 0)).toBe(0));
+
+  it('percentage() calcula el margen normal (40.000 de utilidad sobre 120.000 en ventas)', () =>
+    expect(percentage(40000, 120000)).toBeCloseTo(33.33, 1));
+});
+
+// Regresión directa del caso PED-00000001: un solo pedido entregado por $120.000
+// debe producir un ticket promedio de exactamente $120.000, sin división por cero
+// cuando no hay pedidos entregados en el período.
+describe('ticket promedio — fórmula ventas netas / pedidos entregados', () => {
+  const averageTicket = (netSales: number, deliveredOrders: number) =>
+    deliveredOrders === 0 ? 0 : Math.round((netSales / deliveredOrders) * 100) / 100;
+
+  it('un solo pedido entregado de $120.000 da un ticket de $120.000', () =>
+    expect(averageTicket(120000, 1)).toBe(120000));
+
+  it('no lanza error ni da NaN cuando no hay pedidos entregados', () =>
+    expect(averageTicket(0, 0)).toBe(0));
 });

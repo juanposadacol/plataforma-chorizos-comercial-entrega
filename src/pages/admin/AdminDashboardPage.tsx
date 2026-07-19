@@ -14,7 +14,7 @@ import {
   UserPlus,
   WalletCards,
 } from 'lucide-react';
-import { getDashboardSnapshot } from '../../features/admin/adminService';
+import { fetchRecords, getDashboardMetrics, invokeAdminRpc } from '../../features/admin/adminService';
 import {
   DashboardCards,
   type DashboardMetric,
@@ -25,12 +25,21 @@ import {
   SalesChart,
 } from '../../features/admin/dashboard/DashboardCharts';
 import { InventoryAlerts } from '../../features/admin/inventory/InventoryAlerts';
-import type { AdminOrder, DashboardSnapshot, DateRange } from '../../features/admin/types';
+import type {
+  AdminProduct,
+  CustomerRankingRow,
+  DashboardMetricsSummary,
+  DateRange,
+  ProductRankingRow,
+  SalesBreakdownRow,
+  SalesByDayRow,
+} from '../../features/admin/types';
 import {
-  firstText,
   formatMoney,
+  getBogotaDateString,
   getDateRange,
-  percentage,
+  percentChange,
+  sumStatusCounts,
   toNumber,
   type RangePreset,
 } from '../../features/admin/utils';
@@ -43,23 +52,25 @@ import {
   panelClass,
 } from '../../features/admin/components/AdminUi';
 
-const isWithin = (value: string | undefined, from: Date, to: Date) => {
-  if (!value) return false;
-  const date = new Date(value);
-  return date >= from && date <= to;
-};
+const formatDayLabel = (isoDate: string) =>
+  new Intl.DateTimeFormat('es-CO', { month: 'short', day: '2-digit', timeZone: 'UTC' }).format(
+    new Date(`${isoDate}T00:00:00Z`),
+  );
 
-const validSalesOrder = (order: AdminOrder) => !['cancelled', 'returned'].includes(order.status);
-const salesTotal = (orders: AdminOrder[]) =>
-  orders.filter(validSalesOrder).reduce((sum, order) => sum + toNumber(order.total), 0);
-const change = (current: number, previous: number) =>
-  previous > 0 ? ((current - previous) / previous) * 100 : current > 0 ? 100 : null;
+interface DashboardData {
+  metrics: DashboardMetricsSummary;
+  products: AdminProduct[];
+  salesByDay: SalesByDayRow[];
+  productRanking: ProductRankingRow[];
+  customerRanking: CustomerRankingRow[];
+  paymentDistribution: SalesBreakdownRow[];
+}
 
 export function AdminDashboardPage() {
   const [preset, setPreset] = useState<RangePreset>('month');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
-  const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(null);
+  const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -80,13 +91,38 @@ export function AdminDashboardPage() {
       setLoading(true);
       setError(null);
       try {
-        const monthStart = getDateRange('month').from;
-        const yesterday = getDateRange('yesterday').from;
-        const earliest = new Date(
-          Math.min(range.from.getTime(), monthStart.getTime(), yesterday.getTime()),
-        );
-        const result = await getDashboardSnapshot(earliest, new Date());
-        if (active) setSnapshot(result);
+        const fromDate = getBogotaDateString(range.from);
+        const toDate = getBogotaDateString(range.to);
+        const [metrics, products, salesByDay, productRanking, customerRanking, paymentDistribution] =
+          await Promise.all([
+            getDashboardMetrics(range.from, range.to),
+            fetchRecords<AdminProduct>('products', {
+              orderBy: 'name',
+              ascending: true,
+              limit: 1000,
+            }),
+            invokeAdminRpc<SalesByDayRow[]>('report_sales_by_day', {
+              p_from: fromDate,
+              p_to: toDate,
+            }),
+            invokeAdminRpc<ProductRankingRow[]>('report_product_ranking', {
+              p_from: fromDate,
+              p_to: toDate,
+              p_limit: 6,
+            }),
+            invokeAdminRpc<CustomerRankingRow[]>('report_customer_ranking', {
+              p_from: fromDate,
+              p_to: toDate,
+              p_limit: 6,
+            }),
+            invokeAdminRpc<SalesBreakdownRow[]>('report_sales_breakdown', {
+              p_dimension: 'payment_method',
+              p_from: fromDate,
+              p_to: toDate,
+            }),
+          ]);
+        if (active)
+          setData({ metrics, products, salesByDay, productRanking, customerRanking, paymentDistribution });
       } catch (caught) {
         if (active)
           setError(caught instanceof Error ? caught.message : 'No fue posible cargar el tablero.');
@@ -101,248 +137,161 @@ export function AdminDashboardPage() {
   }, [range.from, range.to]);
 
   const analytics = useMemo(() => {
-    if (!snapshot) return null;
-    const periodOrders = snapshot.orders.filter((order) =>
-      isWithin(order.created_at, range.from, range.to),
-    );
-    const today = getDateRange('today');
-    const yesterday = getDateRange('yesterday');
-    const week = getDateRange('week');
-    const month = getDateRange('month');
-    const todaySales = salesTotal(
-      snapshot.orders.filter((order) => isWithin(order.created_at, today.from, today.to)),
-    );
-    const yesterdaySales = salesTotal(
-      snapshot.orders.filter((order) => isWithin(order.created_at, yesterday.from, yesterday.to)),
-    );
-    const periodSales = salesTotal(periodOrders);
-    const delivered = periodOrders.filter((order) => order.status === 'delivered');
-    const grossProfit = periodOrders
-      .filter(validSalesOrder)
-      .reduce(
-        (sum, order) =>
-          sum +
-          toNumber(
-            order.gross_profit ??
-              toNumber(order.total) - toNumber(order.cost_of_sales ?? order.cost_total),
-          ),
-        0,
-      );
-    const periodExpenses = snapshot.expenses
-      .filter((expense) =>
-        isWithin(expense.created_at ?? expense.expense_date, range.from, range.to),
-      )
-      .reduce((sum, expense) => sum + toNumber(expense.amount), 0);
-    const collected = snapshot.payments
-      .filter(
-        (payment) =>
-          isWithin(payment.created_at ?? payment.payment_date, range.from, range.to) &&
-          !['rejected', 'refunded'].includes(payment.status),
-      )
-      .reduce((sum, payment) => sum + toNumber(payment.amount), 0);
-    const receivables = periodOrders
-      .filter((order) => ['pending', 'partial', 'credit'].includes(order.payment_status))
-      .reduce((sum, order) => sum + toNumber(order.total), 0);
-    const inventoryValue = snapshot.products.reduce(
-      (sum, product) =>
-        sum +
-        toNumber(product.stock_on_hand ?? product.stock_current) *
-          toNumber(product.average_cost ?? product.current_cost),
+    if (!data) return null;
+    const { metrics } = data;
+    const totalOrdersInPeriod = Object.values(metrics.order_status_counts).reduce(
+      (sum, value) => sum + toNumber(value),
       0,
     );
-    const lowStock = snapshot.products.filter(
+    const lowStock = data.products.filter(
       (product) =>
         toNumber(product.stock_available ?? product.stock_current ?? product.stock_on_hand) <=
         toNumber(product.minimum_stock),
     ).length;
-    const pendingNotifications = snapshot.notifications.filter(
-      (notification) =>
-        !notification.read_at && !['sent', 'read'].includes(notification.status ?? ''),
-    ).length;
-    const metrics: DashboardMetric[] = [
+
+    const metricCards: DashboardMetric[] = [
       {
         label: 'Ventas de hoy',
-        value: formatMoney(todaySales),
+        value: formatMoney(metrics.sales_today),
         helper: 'frente a ayer',
-        change: change(todaySales, yesterdaySales),
+        change: percentChange(metrics.sales_today, metrics.sales_yesterday),
         icon: CircleDollarSign,
         accent: 'wine',
       },
       {
         label: 'Ventas de ayer',
-        value: formatMoney(yesterdaySales),
-        helper: 'pedidos no cancelados',
+        value: formatMoney(metrics.sales_yesterday),
+        helper: 'pedidos entregados',
         icon: Receipt,
         accent: 'gold',
       },
       {
         label: 'Ventas semana',
-        value: formatMoney(
-          salesTotal(
-            snapshot.orders.filter((order) => isWithin(order.created_at, week.from, week.to)),
-          ),
-        ),
-        helper: 'semana actual',
+        value: formatMoney(metrics.sales_current_week),
+        helper: 'lunes a hoy',
         icon: TrendingUp,
         accent: 'green',
       },
       {
         label: 'Ventas mes',
-        value: formatMoney(
-          salesTotal(
-            snapshot.orders.filter((order) => isWithin(order.created_at, month.from, month.to)),
-          ),
-        ),
+        value: formatMoney(metrics.sales_current_month),
         helper: 'mes actual',
         icon: Banknote,
         accent: 'wine',
       },
       {
         label: 'Pedidos nuevos',
-        value: String(periodOrders.filter((order) => order.status === 'new').length),
+        value: String(metrics.new_orders),
         helper: range.label.toLocaleLowerCase('es'),
         icon: ShoppingBag,
         accent: 'gold',
       },
       {
         label: 'Pendientes',
-        value: String(
-          periodOrders.filter((order) =>
-            ['pending_confirmation', 'confirmed'].includes(order.status),
-          ).length,
-        ),
+        value: String(sumStatusCounts(metrics.order_status_counts, 'pending_confirmation', 'confirmed')),
         helper: 'requieren seguimiento',
         icon: Clock3,
         accent: 'blue',
       },
       {
         label: 'En preparación',
-        value: String(periodOrders.filter((order) => order.status === 'preparing').length),
+        value: String(sumStatusCounts(metrics.order_status_counts, 'preparing')),
         helper: 'en producción',
         icon: PackageCheck,
         accent: 'blue',
       },
       {
         label: 'Entregados',
-        value: String(delivered.length),
-        helper: `${periodOrders.length} pedidos en total`,
+        value: String(metrics.delivered_orders),
+        helper: `${totalOrdersInPeriod} pedidos en total`,
         icon: ClipboardCheck,
         accent: 'green',
       },
       {
         label: 'Ticket promedio',
-        value: formatMoney(periodOrders.length ? periodSales / periodOrders.length : 0),
-        helper: 'por pedido válido',
+        value: formatMoney(metrics.average_ticket),
+        helper: 'por pedido entregado',
         icon: WalletCards,
         accent: 'wine',
       },
       {
         label: 'Utilidad bruta',
-        value: formatMoney(grossProfit),
-        helper: `${percentage(grossProfit, periodSales).toFixed(1)}% de margen`,
+        value: formatMoney(metrics.gross_profit),
+        helper: `${metrics.gross_margin.toFixed(1)}% de margen`,
         icon: TrendingUp,
         accent: 'green',
       },
       {
         label: 'Utilidad neta',
-        value: formatMoney(grossProfit - periodExpenses),
+        value: formatMoney(metrics.net_profit),
         helper: 'bruta menos gastos',
         icon: Percent,
         accent: 'green',
       },
       {
         label: 'Recaudado',
-        value: formatMoney(collected),
+        value: formatMoney(metrics.collected),
         helper: range.label.toLocaleLowerCase('es'),
         icon: Banknote,
         accent: 'green',
       },
       {
         label: 'Por cobrar',
-        value: formatMoney(receivables),
-        helper: 'saldo estimado del período',
+        value: formatMoney(metrics.accounts_receivable),
+        helper: 'saldo pendiente vigente',
         icon: CircleDollarSign,
         accent: 'gold',
       },
       {
         label: 'Valor inventario',
-        value: formatMoney(inventoryValue),
+        value: formatMoney(metrics.inventory_value),
         helper: `${lowStock} productos con alerta`,
         icon: Boxes,
         accent: lowStock ? 'gold' : 'green',
       },
       {
         label: 'Clientes nuevos',
-        value: String(
-          snapshot.customers.filter((customer) =>
-            isWithin(customer.created_at, range.from, range.to),
-          ).length,
-        ),
+        value: String(metrics.new_customers),
         helper: range.label.toLocaleLowerCase('es'),
         icon: UserPlus,
         accent: 'blue',
       },
       {
         label: 'Notificaciones',
-        value: String(pendingNotifications),
+        value: String(metrics.pending_notifications),
         helper: 'pendientes de atención',
         icon: BellRing,
-        accent: pendingNotifications ? 'gold' : 'green',
+        accent: metrics.pending_notifications ? 'gold' : 'green',
       },
     ];
 
-    const salesByDay = new Map<string, { sales: number; profit: number }>();
-    periodOrders.filter(validSalesOrder).forEach((order) => {
-      const key = new Intl.DateTimeFormat('es-CO', {
-        month: 'short',
-        day: '2-digit',
-        timeZone: 'America/Bogota',
-      }).format(new Date(order.created_at));
-      const current = salesByDay.get(key) ?? { sales: 0, profit: 0 };
-      current.sales += toNumber(order.total);
-      current.profit += toNumber(
-        order.gross_profit ??
-          toNumber(order.total) - toNumber(order.cost_of_sales ?? order.cost_total),
-      );
-      salesByDay.set(key, current);
-    });
+    const salesSeries = data.salesByDay.map((row) => ({
+      label: formatDayLabel(row.sale_date),
+      sales: toNumber(row.net_sales),
+      profit: toNumber(row.gross_profit),
+    }));
+    const productRanking = data.productRanking.map((row) => ({
+      name: row.product_name,
+      value: toNumber(row.net_sales),
+    }));
+    const customerRanking = data.customerRanking.map((row) => ({
+      name: row.customer_name,
+      value: toNumber(row.net_sales),
+    }));
+    const paymentDistribution = data.paymentDistribution.map((row) => ({
+      name: row.dimension_label,
+      value: toNumber(row.net_sales),
+    }));
 
-    const periodOrderIds = new Set(periodOrders.filter(validSalesOrder).map((order) => order.id));
-    const productTotals = new Map<string, number>();
-    snapshot.orderItems
-      .filter((item) => periodOrderIds.has(item.order_id))
-      .forEach((item) => {
-        const name =
-          firstText(item, 'product_name', 'name') || firstText(item, 'sku') || 'Producto';
-        productTotals.set(name, (productTotals.get(name) ?? 0) + toNumber(item.subtotal));
-      });
-    const customerTotals = new Map<string, number>();
-    periodOrders.filter(validSalesOrder).forEach((order) => {
-      const name =
-        firstText(order, 'customer_name_snapshot', 'customer_name') || 'Cliente sin nombre';
-      customerTotals.set(name, (customerTotals.get(name) ?? 0) + toNumber(order.total));
-    });
-    const paymentTotals = new Map<string, number>();
-    periodOrders.filter(validSalesOrder).forEach((order) => {
-      const method =
-        firstText(order, 'payment_method_name', 'payment_method', 'payment_method_code') ||
-        'Sin especificar';
-      paymentTotals.set(method, (paymentTotals.get(method) ?? 0) + toNumber(order.total));
-    });
-    const toRanking = (source: Map<string, number>) =>
-      [...source]
-        .map(([name, value]) => ({ name, value }))
-        .sort((a, b) => b.value - a.value)
-        .slice(0, 6);
     return {
-      metrics,
-      periodOrders,
-      salesSeries: [...salesByDay].map(([label, values]) => ({ label, ...values })),
-      productRanking: toRanking(productTotals),
-      customerRanking: toRanking(customerTotals),
-      paymentDistribution: toRanking(paymentTotals),
+      metrics: metricCards,
+      hasActivity: totalOrdersInPeriod > 0,
+      salesSeries,
+      productRanking,
+      customerRanking,
+      paymentDistribution,
     };
-  }, [range, snapshot]);
+  }, [range.label, data]);
 
   return (
     <>
@@ -396,7 +345,7 @@ export function AdminDashboardPage() {
         <div className={panelClass}>
           <ErrorState message={error} onRetry={() => window.location.reload()} />
         </div>
-      ) : !snapshot || !analytics ? (
+      ) : !data || !analytics ? (
         <div className={panelClass}>
           <EmptyState
             title="Sin información para mostrar"
@@ -406,7 +355,7 @@ export function AdminDashboardPage() {
       ) : (
         <>
           <DashboardCards metrics={analytics.metrics} />
-          {analytics.periodOrders.length === 0 ? (
+          {!analytics.hasActivity ? (
             <div className={panelClass}>
               <EmptyState
                 title={`Sin ventas en ${range.label.toLocaleLowerCase('es')}`}
@@ -418,22 +367,22 @@ export function AdminDashboardPage() {
               <SalesChart data={analytics.salesSeries} />
               <RankingChart
                 title="Productos con mayor facturación"
-                description="Ranking calculado desde el detalle histórico de pedidos."
+                description="Ranking calculado desde el detalle histórico de pedidos entregados."
                 data={analytics.productRanking}
               />
               <RankingChart
                 title="Clientes que más compran"
-                description="Facturación acumulada por cliente en el período."
+                description="Facturación acumulada por cliente en el período (pedidos entregados)."
                 data={analytics.customerRanking}
               />
               <DistributionChart
                 title="Ventas por forma de pago"
-                description="Participación del valor vendido por método."
+                description="Participación del valor vendido por método (pedidos entregados)."
                 data={analytics.paymentDistribution}
               />
             </section>
           )}
-          <InventoryAlerts products={snapshot.products} />
+          <InventoryAlerts products={data.products} />
         </>
       )}
     </>
