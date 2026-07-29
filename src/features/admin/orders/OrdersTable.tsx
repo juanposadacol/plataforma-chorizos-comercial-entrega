@@ -1,15 +1,17 @@
 import { useMemo, useState } from 'react';
-import { ArrowRight, RefreshCw, Truck } from 'lucide-react';
+import { ArrowRight, RefreshCw, Trash2, Truck } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { invokeAdminRpc } from '../adminService';
 import type { AdminOrder } from '../types';
 import { orderTotal } from '../types';
 import {
+  canDeleteOrderPermanently,
   canDeliverViaCombinedAction,
   firstText,
   formatAdminDate,
   formatMoney,
   matchesSearch,
+  orderLooksPurgeable,
   orderStatusLabels,
   orderStatuses,
   paymentStatusLabels,
@@ -29,6 +31,7 @@ import {
   type TableColumn,
 } from '../components/AdminUi';
 import { CancelReturnModal } from './CancelReturnModal';
+import { DeleteOrderModal } from './DeleteOrderModal';
 import { DeliverAndPayModal } from './DeliverAndPayModal';
 
 // Estados que solo se pueden alcanzar mediante modal (requieren motivo o confirmación especial).
@@ -42,6 +45,8 @@ export function OrdersTable() {
   // acción que el servidor rechazará. Ambos roles siguen pudiendo registrar
   // pagos de pedidos ya entregados desde Pagos y cartera.
   const canUseDeliverAndPay = canDeliverViaCombinedAction(access.roles);
+  // Solo el rol de mayor privilegio ve la papelera, igual que exige la RPC.
+  const canPurge = canDeleteOrderPermanently(access.roles);
   const { data, loading, refreshing, error, reload } = useAdminData<AdminOrder>(
     'orders',
     { orderBy: 'created_at', limit: 1000 },
@@ -62,15 +67,23 @@ export function OrdersTable() {
   // Modal de "entregar y pagar".
   const [deliverPayModal, setDeliverPayModal] = useState<AdminOrder | null>(null);
 
+  // Modal de eliminación definitiva (papelera).
+  const [deleteModal, setDeleteModal] = useState<AdminOrder | null>(null);
+  // Ids ya purgados: retiran la fila de inmediato, sin esperar el refetch ni el
+  // evento de realtime.
+  const [purgedIds, setPurgedIds] = useState<string[]>([]);
+  const [notice, setNotice] = useState<string | null>(null);
+
   const filtered = useMemo(
     () =>
       data.filter(
         (order) =>
+          !purgedIds.includes(order.id) &&
           matchesSearch(order, search) &&
           (status === 'all' || order.status === status) &&
           (paymentStatus === 'all' || order.payment_status === paymentStatus),
       ),
-    [data, paymentStatus, search, status],
+    [data, paymentStatus, purgedIds, search, status],
   );
 
   const transition = async (order: AdminOrder, nextStatus: string) => {
@@ -118,6 +131,16 @@ export function OrdersTable() {
     } finally {
       setUpdating(null);
     }
+  };
+
+  const handleDeleted = async (orderId: string) => {
+    const order = data.find((row) => row.id === orderId);
+    setPurgedIds((current) => [...current, orderId]);
+    setNotice(
+      `Pedido ${firstText(order ?? {}, 'order_number') || orderId.slice(0, 8)} eliminado definitivamente. El inventario reservado fue liberado.`,
+    );
+    // Refresca la tabla y, con ella, las métricas derivadas del listado.
+    await reload();
   };
 
   const columns: TableColumn<AdminOrder>[] = [
@@ -197,7 +220,7 @@ export function OrdersTable() {
     {
       key: 'open',
       header: '',
-      className: 'w-24',
+      className: 'w-36',
       render: (order) => (
         <div className="flex items-center gap-1">
           {canUseDeliverAndPay &&
@@ -222,6 +245,23 @@ export function OrdersTable() {
           >
             <ArrowRight className="h-4 w-4" />
           </Link>
+          {canPurge && orderLooksPurgeable(order) && (
+            <>
+              <span aria-hidden="true" className="mx-0.5 h-6 w-px bg-artisan-line" />
+              <button
+                type="button"
+                aria-label={`Eliminar definitivamente el pedido ${firstText(order, 'order_number')}`}
+                title="Eliminar definitivamente"
+                className="grid h-9 w-9 place-items-center rounded-lg text-red-700 hover:bg-red-50"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setDeleteModal(order);
+                }}
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </>
+          )}
         </div>
       ),
     },
@@ -242,6 +282,21 @@ export function OrdersTable() {
 
   return (
     <div className="space-y-4">
+      {notice && (
+        <div
+          className="flex items-start justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800"
+          role="status"
+        >
+          <span>{notice}</span>
+          <button
+            type="button"
+            className="font-bold underline"
+            onClick={() => setNotice(null)}
+          >
+            Cerrar
+          </button>
+        </div>
+      )}
       {mutationError && (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
           {mutationError}
@@ -321,6 +376,15 @@ export function OrdersTable() {
           order={deliverPayModal}
           onClose={() => setDeliverPayModal(null)}
           onSuccess={reload}
+        />
+      )}
+
+      {deleteModal && (
+        <DeleteOrderModal
+          open
+          order={deleteModal}
+          onClose={() => setDeleteModal(null)}
+          onDeleted={handleDeleted}
         />
       )}
     </div>

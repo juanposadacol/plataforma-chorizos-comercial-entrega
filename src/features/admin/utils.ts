@@ -80,6 +80,63 @@ export const hasAnyRole = (roles: string[], allowed: readonly string[]): boolean
 export const canDeliverViaCombinedAction = (roles: string[]): boolean =>
   hasAnyRole(roles, ['superadmin', 'admin']);
 
+/**
+ * Rol de mayor privilegio del proyecto. Es el único que puede eliminar un pedido
+ * definitivamente, igual que exige `delete_order_permanently` en el servidor
+ * (202607290001_delete_order_permanently.sql). `admin` NO alcanza: la RPC usa
+ * `has_role('superadmin')`, no `is_admin()`.
+ *
+ * Ocultar el botón es solo cortesía de interfaz; la frontera real es la RPC.
+ */
+export const canDeleteOrderPermanently = (roles: string[]): boolean =>
+  hasAnyRole(roles, ['superadmin']);
+
+/** Estados en los que el servidor acepta la eliminación definitiva. */
+export const PURGEABLE_ORDER_STATUSES = ['new', 'pending_confirmation'] as const;
+
+/**
+ * Espejo en cliente de las condiciones de `order_is_purgeable`, limitado a lo que
+ * la fila de la tabla ya conoce. El servidor revalida todo con el pedido
+ * bloqueado, así que esto solo evita ofrecer una acción que sería rechazada.
+ */
+export const orderLooksPurgeable = (order: {
+  status?: string;
+  payment_status?: string;
+  amount_paid?: number;
+  delivered_at?: string | null;
+  returned_at?: string | null;
+}): boolean =>
+  PURGEABLE_ORDER_STATUSES.includes(
+    (order.status ?? '') as (typeof PURGEABLE_ORDER_STATUSES)[number],
+  ) &&
+  order.payment_status === 'pending' &&
+  !toNumber(order.amount_paid) &&
+  !order.delivered_at &&
+  !order.returned_at;
+
+/**
+ * Traduce los códigos de `delete_order_permanently` a mensajes para el usuario.
+ * Nunca se muestra el texto crudo de PostgreSQL.
+ */
+export const describeOrderDeletionError = (raw: string): string => {
+  const table: Array<[string, string]> = [
+    ['ORDER_NOT_FOUND', 'El pedido ya no existe. Actualiza la lista.'],
+    ['NOT_AUTHENTICATED', 'Tu sesión expiró. Vuelve a iniciar sesión.'],
+    ['NOT_AUTHORIZED', 'Solo un superadministrador puede eliminar pedidos definitivamente.'],
+    ['CONFIRMATION_MISMATCH', 'El número escrito no coincide con el del pedido.'],
+    ['STATUS_NOT_ELIGIBLE', 'Solo se pueden eliminar pedidos en estado Nuevo o Por confirmar.'],
+    ['ORDER_HAS_PAYMENT', 'El pedido tiene pagos registrados y no puede eliminarse.'],
+    ['ORDER_HAS_FULFILLMENT', 'El pedido tiene entrega, despacho o devolución registrada.'],
+    ['ORDER_HAS_ACCOUNTING', 'El pedido tiene gastos o movimientos de caja asociados.'],
+    ['INVENTORY_NOT_REVERSIBLE', 'El inventario del pedido no se puede revertir.'],
+    ['ORDER_LOCKED', 'Otra persona está modificando este pedido. Intenta de nuevo.'],
+  ];
+  for (const [code, message] of table) {
+    if (raw.includes(code)) return message;
+  }
+  return 'No fue posible eliminar el pedido.';
+};
+
 export const orderStatusLabels: Record<string, string> = {
   new: 'Nuevo',
   pending_confirmation: 'Por confirmar',

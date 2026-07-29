@@ -5,7 +5,9 @@ import reactRefresh from 'eslint-plugin-react-refresh';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['dist', 'coverage', 'node_modules', 'supabase/functions'] },
+  // `supabase/.temp` lo genera el CLI al ejecutar `supabase start` (ya está en
+  // .gitignore); contiene código empaquetado del runtime, no fuente del proyecto.
+  { ignores: ['dist', 'coverage', 'node_modules', 'supabase/functions', 'supabase/.temp'] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ['**/*.{ts,tsx}'],
