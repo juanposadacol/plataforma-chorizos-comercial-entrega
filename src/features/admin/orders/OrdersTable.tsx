@@ -7,6 +7,7 @@ import { orderTotal } from '../types';
 import {
   canDeleteOrderPermanently,
   canDeliverViaCombinedAction,
+  explainHiddenTrash,
   firstText,
   formatAdminDate,
   formatMoney,
@@ -142,6 +143,19 @@ export function OrdersTable() {
     // Refresca la tabla y, con ella, las métricas derivadas del listado.
     await reload();
   };
+
+  // Diagnóstico solo de desarrollo: explica por qué la papelera no aparece, sin
+  // exponer nada del pedido ni del usuario (solo códigos de motivo y rol).
+  // Evita que "no veo el botón" vuelva a ser indistinguible entre falta de rol,
+  // pedido no elegible y roles sin cargar.
+  if (import.meta.env.DEV && data.length) {
+    const reasons = new Set(data.map((order) => explainHiddenTrash(access.roles, order)));
+    console.info('[pedidos] papelera', {
+      roles: access.roles,
+      canPurge,
+      reasons: [...reasons],
+    });
+  }
 
   const columns: TableColumn<AdminOrder>[] = [
     {

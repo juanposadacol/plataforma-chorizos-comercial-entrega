@@ -31,10 +31,20 @@ interface RoleRecord extends Record<string, unknown> {
   code?: string;
   description?: string;
 }
+/**
+ * Columnas reales de `public.user_roles` (202607170001_core_schema.sql:90).
+ *
+ * La tabla NO tiene `id` ni `created_at`: su clave primaria es compuesta
+ * `(profile_id, role_id)` y su marca temporal se llama `assigned_at`. El tipo
+ * anterior declaraba un `id: string` inexistente, lo que ocultaba que también el
+ * `orderBy` de la consulta apuntaba a una columna que no existe.
+ */
 interface UserRole extends Record<string, unknown> {
-  id: string;
   profile_id: string;
   role_id: string;
+  assigned_by?: string | null;
+  assigned_at?: string;
+  expires_at?: string | null;
 }
 
 export function UsersPage() {
@@ -48,9 +58,14 @@ export function UsersPage() {
     ascending: true,
     limit: 100,
   });
+  // `assigned_at` es la marca temporal real de user_roles. Ordenar por
+  // `created_at` hacía que PostgREST rechazara la consulta completa
+  // ("column user_roles.created_at does not exist") y la pantalla entera
+  // quedaba en estado de error. Se conserva un orden determinista porque hay
+  // `limit`: sin ORDER BY, qué 2000 filas llegan queda indefinido.
   const assignmentsState = useAdminData<UserRole>(
     'user_roles',
-    { orderBy: 'created_at', limit: 2000 },
+    { orderBy: 'assigned_at', limit: 2000 },
     true,
   );
   const [search, setSearch] = useState('');

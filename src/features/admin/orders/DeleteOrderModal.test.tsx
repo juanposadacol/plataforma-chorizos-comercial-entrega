@@ -6,6 +6,7 @@ import { DeleteOrderModal } from './DeleteOrderModal';
 import {
   canDeleteOrderPermanently,
   describeOrderDeletionError,
+  explainHiddenTrash,
   orderLooksPurgeable,
 } from '../utils';
 import type { AdminOrder } from '../types';
@@ -69,6 +70,65 @@ describe('11. visibilidad del botón según el rol', () => {
         delivered_at: '2026-07-01T00:00:00Z',
       }),
     ).toBe(false);
+  });
+});
+
+// Diagnóstico del caso reportado en producción: la papelera no aparecía para el
+// pedido #PED-00000012 (Nuevo / Pendiente). Estas pruebas fijan exactamente cuál
+// de las causas posibles aplica en cada combinación, sin relajar la regla.
+describe('por qué se oculta la papelera (caso #PED-00000012)', () => {
+  const PED_00000012 = {
+    status: 'new',
+    payment_status: 'pending',
+    amount_paid: 0,
+    delivered_at: null,
+    returned_at: null,
+  };
+
+  it('3/6. un superadmin SÍ ve la papelera en un pedido Nuevo y Pendiente', () => {
+    expect(explainHiddenTrash(['superadmin'], PED_00000012)).toBe('visible');
+    expect(canDeleteOrderPermanently(['superadmin'])).toBe(true);
+    expect(orderLooksPurgeable(PED_00000012)).toBe(true);
+  });
+
+  it('4. un admin normal no la ve, y el motivo es el rol, no el pedido', () => {
+    expect(explainHiddenTrash(['admin'], PED_00000012)).toBe('role-not-superadmin');
+  });
+
+  it('5. un cliente no la ve', () => {
+    expect(explainHiddenTrash(['customer'], PED_00000012)).toBe('role-not-superadmin');
+  });
+
+  it('distingue «roles sin cargar» de «rol insuficiente»', () => {
+    // Si get_my_access falla, access.roles queda vacío: no es lo mismo que ser
+    // admin, y confundirlos es lo que volvía indiagnosticable este fallo.
+    expect(explainHiddenTrash([], PED_00000012)).toBe('roles-not-loaded');
+  });
+
+  it('7. un pedido Entregado o Pagado no la muestra ni al superadmin', () => {
+    expect(explainHiddenTrash(['superadmin'], { ...PED_00000012, status: 'delivered' })).toBe(
+      'status-not-eligible',
+    );
+    expect(explainHiddenTrash(['superadmin'], { ...PED_00000012, payment_status: 'paid' })).toBe(
+      'payment-not-pending',
+    );
+    expect(explainHiddenTrash(['superadmin'], { ...PED_00000012, amount_paid: 5000 })).toBe(
+      'order-has-amount-paid',
+    );
+    expect(
+      explainHiddenTrash(['superadmin'], {
+        ...PED_00000012,
+        delivered_at: '2026-07-01T00:00:00Z',
+      }),
+    ).toBe('order-fulfilled');
+  });
+
+  it('el motivo nunca contiene datos del pedido ni del usuario', () => {
+    const reason = explainHiddenTrash(['superadmin'], {
+      ...PED_00000012,
+      status: 'delivered',
+    });
+    expect(reason).toMatch(/^[a-z-]+$/);
   });
 });
 

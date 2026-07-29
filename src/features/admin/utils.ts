@@ -115,6 +115,47 @@ export const orderLooksPurgeable = (order: {
   !order.returned_at;
 
 /**
+ * Por qué NO se ofrece la papelera en una fila. Función pura y sin datos
+ * personales: solo devuelve un código de motivo, para poder registrarlo en
+ * desarrollo sin filtrar nada del pedido ni del usuario.
+ *
+ * No relaja ninguna regla: es exactamente la negación de
+ * `canDeleteOrderPermanently && orderLooksPurgeable`.
+ */
+export type HiddenTrashReason =
+  | 'visible'
+  | 'roles-not-loaded'
+  | 'role-not-superadmin'
+  | 'status-not-eligible'
+  | 'payment-not-pending'
+  | 'order-has-amount-paid'
+  | 'order-fulfilled';
+
+export const explainHiddenTrash = (
+  roles: string[],
+  order: {
+    status?: string;
+    payment_status?: string;
+    amount_paid?: number;
+    delivered_at?: string | null;
+    returned_at?: string | null;
+  },
+): HiddenTrashReason => {
+  if (!roles.length) return 'roles-not-loaded';
+  if (!canDeleteOrderPermanently(roles)) return 'role-not-superadmin';
+  if (
+    !PURGEABLE_ORDER_STATUSES.includes(
+      (order.status ?? '') as (typeof PURGEABLE_ORDER_STATUSES)[number],
+    )
+  )
+    return 'status-not-eligible';
+  if (order.payment_status !== 'pending') return 'payment-not-pending';
+  if (toNumber(order.amount_paid)) return 'order-has-amount-paid';
+  if (order.delivered_at || order.returned_at) return 'order-fulfilled';
+  return 'visible';
+};
+
+/**
  * Traduce los códigos de `delete_order_permanently` a mensajes para el usuario.
  * Nunca se muestra el texto crudo de PostgreSQL.
  */
