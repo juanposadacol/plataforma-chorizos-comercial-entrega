@@ -4,6 +4,10 @@ name: Supabase Keep Alive
 # Objetivo: mantener actividad legítima en el proyecto Supabase Free y avisar
 # si la API REST deja de responder. No escribe, no migra y no usa service_role.
 # Es un mecanismo de mejor esfuerzo: Supabase no garantiza que evite la pausa.
+#
+# Autenticación: la publishable key (`sb_publishable_...`) viaja únicamente en el
+# header `apikey`. No se envía como `Authorization: Bearer` porque no es un JWT;
+# ese header queda reservado para tokens de sesión de usuario, que aquí no hay.
 
 on:
   schedule:
@@ -31,13 +35,13 @@ jobs:
       - name: Read public catalog (read-only RPC)
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
         shell: bash
         run: |
           set -euo pipefail
 
           : "${SUPABASE_URL:?Missing SUPABASE_URL}"
-          : "${SUPABASE_ANON_KEY:?Missing SUPABASE_ANON_KEY}"
+          : "${SUPABASE_PUBLISHABLE_KEY:?Missing SUPABASE_PUBLISHABLE_KEY}"
 
           RESPONSE_FILE="$(mktemp)"
           trap 'rm -f "${RESPONSE_FILE}"' EXIT
@@ -60,10 +64,8 @@ jobs:
               --max-time 60 \
               --request POST \
               "${SUPABASE_URL%/}/rest/v1/rpc/get_catalog_prices" \
-              --header "apikey: ${SUPABASE_ANON_KEY}" \
-              --header "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+              --header "apikey: ${SUPABASE_PUBLISHABLE_KEY}" \
               --header "Content-Type: application/json" \
-              --header "Accept: application/json" \
               --data '{}'
           )"
           CURL_EXIT=$?

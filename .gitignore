@@ -6,6 +6,9 @@ dist/
 coverage/
 .netlify/
 .supabase/
+# Metadata local del Supabase CLI; no describe el proyecto remoto.
+supabase/.branches/
+supabase/.temp/
 *.log
 !.env.example
 

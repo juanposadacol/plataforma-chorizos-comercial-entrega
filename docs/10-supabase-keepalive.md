@@ -60,8 +60,16 @@ alta carga, son normales y no indican falla.
 
 ```
 POST {SUPABASE_URL}/rest/v1/rpc/get_catalog_prices
+Headers: apikey: {SUPABASE_PUBLISHABLE_KEY}
+         Content-Type: application/json
 Body: {}
 ```
+
+La clave pública se envía **solamente** en el header `apikey`. El workflow **no**
+manda `Authorization: Bearer`: las publishable keys de Supabase
+(`sb_publishable_...`) no son JWT, y ese header está reservado para el token de
+sesión de un usuario autenticado, que aquí no existe. Sin sesión, la petición se
+ejecuta con el rol de base de datos `anon`.
 
 `public.get_catalog_prices()` está definida en
 `supabase/migrations/202607170002_transactional_api.sql` y verificada como
@@ -88,12 +96,11 @@ escriben en el YAML ni se imprimen en los registros.
 | Secreto | Contenido |
 | --- | --- |
 | `SUPABASE_URL` | `https://<referencia-del-proyecto>.supabase.co` |
-| `SUPABASE_ANON_KEY` | Clave pública `anon` del proyecto |
+| `SUPABASE_PUBLISHABLE_KEY` | Clave **publishable** del proyecto; normalmente empieza por `sb_publishable_` |
 
-Son los mismos valores que ya usa el frontend (`VITE_SUPABASE_URL` y
-`VITE_SUPABASE_ANON_KEY`), que por diseño viajan al navegador de cualquier
-visitante. La clave `anon` está limitada por RLS y por los `grant` de la base de
-datos.
+Es la misma clave pública que ya consume el frontend a través de sus variables
+`VITE_` (ver `.env.example` y `src/lib/env.ts`) y que, por diseño, viaja al
+navegador de cualquier visitante de la tienda.
 
 ### Cómo agregarlos
 
@@ -101,17 +108,38 @@ datos.
 2. **Settings → Secrets and variables → Actions**.
 3. Pestaña **Secrets** → botón **New repository secret**.
 4. Crear `SUPABASE_URL` con la URL del proyecto (sin barra final).
-5. Repetir con `SUPABASE_ANON_KEY` y la clave pública `anon`.
+5. Repetir con `SUPABASE_PUBLISHABLE_KEY` y la clave publishable.
 
-Los valores se obtienen en Supabase: **Project Settings → API → Project URL** y
-**Project API keys → `anon` / `public`**.
+Los valores se obtienen en Supabase: **Project Settings → API Keys → Project URL**
+y la clave marcada como **publishable** (`sb_publishable_...`). En proyectos
+antiguos que aún no migraron al nuevo formato, el equivalente es la clave legada
+`anon` / `public`, un JWT que empieza por `eyJ`; el workflow funciona con ambas
+porque envía la clave en el header `apikey`.
 
-### Prohibido: `service_role`
+### Qué significa "publishable"
 
-**Nunca** se debe usar la clave `service_role` en este workflow ni en ningún otro
-flujo de GitHub Actions de este repositorio. Esa clave ignora RLS y permite leer
-y modificar todos los datos, incluidos clientes, pedidos y pagos. Si alguna vez
-se filtra en un log público, hay que rotarla de inmediato desde Supabase.
+- Es una clave **pública y de bajos privilegios**: está pensada para publicarse
+  en el navegador y no otorga por sí misma acceso a nada.
+- **La seguridad real no la aporta la clave**, sino las políticas **RLS** y los
+  **`GRANT`** de PostgreSQL. Con esta clave, la petición corre como el rol `anon`,
+  que en este proyecto solo puede ejecutar tres funciones
+  (`get_catalog_prices`, `get_public_settings`, `get_order_tracking`), tal como
+  fija la migración `202607180007_harden_anon_default_privileges.sql`.
+- Se envía **únicamente** en el header `apikey`, nunca como `Authorization: Bearer`.
+
+### Prohibido: claves secretas
+
+**Nunca** se deben usar en este workflow —ni en ningún otro flujo de GitHub
+Actions de este repositorio— las siguientes credenciales:
+
+- una **secret key** `sb_secret_...`;
+- la clave legada **`service_role`**;
+- la **contraseña de la base de datos** ni una cadena de conexión directa.
+
+Todas ellas ignoran RLS y permiten leer y modificar todos los datos, incluidos
+clientes, pedidos y pagos. Ninguna hace falta para una lectura del catálogo
+público. Si alguna se filtra en un log público, hay que rotarla de inmediato
+desde Supabase.
 
 ## 6. Ejecución manual
 
@@ -145,9 +173,9 @@ mensaje del log indica el caso:
 
 | Mensaje | Causa probable | Acción |
 | --- | --- | --- |
-| `Missing SUPABASE_URL` / `Missing SUPABASE_ANON_KEY` | El secreto no existe o está vacío | Recrear el secreto (sección 5) |
+| `Missing SUPABASE_URL` / `Missing SUPABASE_PUBLISHABLE_KEY` | El secreto no existe o está vacío | Recrear el secreto (sección 5) |
 | `transport error (curl exit N)` | DNS, red o Supabase no alcanzable tras 3 reintentos | Reintentar manualmente; si persiste, revisar el estado del proyecto en Supabase |
-| `HTTP 401` / `HTTP 403` | Clave `anon` rotada, o `anon` perdió `execute` sobre la RPC | Actualizar el secreto; verificar los `grant` de la migración `202607180007` |
+| `HTTP 401` / `HTTP 403` | Publishable key revocada o mal copiada, o el rol `anon` perdió `execute` sobre la RPC | Regenerar/actualizar `SUPABASE_PUBLISHABLE_KEY`; verificar los `grant` de la migración `202607180007` |
 | `HTTP 404` | La RPC `get_catalog_prices` no existe en ese proyecto, o la URL apunta al proyecto equivocado | Verificar `SUPABASE_URL` y que las migraciones estén aplicadas |
 | `HTTP 5xx` | Incidente de Supabase o proyecto pausado | Consultar `status.supabase.com` y el panel del proyecto; reanudar si aparece pausado |
 
