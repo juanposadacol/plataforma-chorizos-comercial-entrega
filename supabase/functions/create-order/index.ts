@@ -3,15 +3,21 @@ import { createOrderSchema } from '../_shared/order-schema.ts';
 import {
   bearerToken,
   clientAddress,
-  corsHeaders,
   isAllowedOrigin,
   jsonResponse,
+  preflightHeaders,
   readJson,
+  readableRejectionHeaders,
 } from '../_shared/http.ts';
+import { classifyCredential, resolveActor } from '../_shared/auth.ts';
 
 const url = Deno.env.get('SUPABASE_URL');
 const anonKey = Deno.env.get('SUPABASE_ANON_KEY');
 const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+// Presentes en proyectos con el sistema de claves moderno. Permiten reconocer
+// una publishable key sin adivinar por su prefijo.
+const publishableKeys = Deno.env.get('SUPABASE_PUBLISHABLE_KEYS');
+const secretKeys = Deno.env.get('SUPABASE_SECRET_KEYS');
 
 function publicError(error: unknown): { status: number; code: string; message: string } {
   const raw = error instanceof Error ? error.message : String(error);
@@ -26,13 +32,33 @@ function publicError(error: unknown): { status: number; code: string; message: s
 
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') {
-    return new Response(null, { status: 204, headers: corsHeaders(request) });
+    return new Response(null, { status: 204, headers: preflightHeaders(request) });
   }
   if (request.method !== 'POST') {
-    return jsonResponse(request, 405, { error: { code: 'METHOD_NOT_ALLOWED' } }, { allow: 'POST' });
+    return jsonResponse(
+      request,
+      405,
+      {
+        error: {
+          code: 'METHOD_NOT_ALLOWED',
+          message: 'Este recurso solo acepta solicitudes POST.',
+        },
+      },
+      { ...readableRejectionHeaders(request), allow: 'POST' },
+    );
   }
   if (!isAllowedOrigin(request)) {
-    return jsonResponse(request, 403, { error: { code: 'ORIGIN_NOT_ALLOWED' } });
+    return jsonResponse(
+      request,
+      403,
+      {
+        error: {
+          code: 'ORIGIN_NOT_ALLOWED',
+          message: 'Este sitio no está autorizado para crear pedidos.',
+        },
+      },
+      readableRejectionHeaders(request),
+    );
   }
   if (!url || !anonKey || !serviceRoleKey) {
     return jsonResponse(request, 503, {
@@ -68,24 +94,52 @@ Deno.serve(async (request) => {
       });
     }
 
-    let authUserId: string | null = null;
-    let authPhone: string | null = null;
-    const token = bearerToken(request);
-    // supabase-js sends the anon key as Bearer when there is no user session.
-    if (token && token !== anonKey) {
+    // supabase-js manda SIEMPRE una clave de API como Bearer cuando no hay
+    // sesión: anon key legacy en proyectos antiguos, publishable key en los
+    // modernos. Ninguna de las dos es una sesión, así que no se envían a
+    // `auth.getUser()`. Solo un token con forma de JWT llega a verificarse, y
+    // la verificación —no la forma— es lo que concede identidad.
+    const credential = classifyCredential(bearerToken(request), {
+      anonKey,
+      publishableKeys,
+      secretKeys,
+      serviceRoleKey,
+    });
+
+    const actor = await resolveActor(credential, async (token) => {
       const authClient = createClient(url, anonKey, {
         global: { headers: { Authorization: `Bearer ${token}` } },
         auth: { persistSession: false, autoRefreshToken: false },
       });
       const { data, error } = await authClient.auth.getUser(token);
-      if (error || !data.user) {
-        return jsonResponse(request, 401, {
-          error: { code: 'INVALID_SESSION', message: 'La sesión no es válida.' },
-        });
+      if (error || !data.user) return null;
+      return { id: data.user.id, phone: data.user.phone ?? null, role: data.user.role ?? null };
+    });
+
+    if (!actor.ok) {
+      if (actor.code === 'PRIVILEGED_CREDENTIAL') {
+        // Una credencial de servidor llegó desde un cliente. No se procesa ni
+        // se detalla el motivo.
+        console.error('create-order rejected a privileged credential');
+        return jsonResponse(
+          request,
+          403,
+          {
+            error: {
+              code: 'PRIVILEGED_CREDENTIAL',
+              message: 'La credencial enviada no es válida para esta operación.',
+            },
+          },
+          readableRejectionHeaders(request),
+        );
       }
-      authUserId = data.user.id;
-      authPhone = data.user.phone ?? null;
+      return jsonResponse(request, 401, {
+        error: { code: 'INVALID_SESSION', message: 'La sesión no es válida.' },
+      });
     }
+
+    const authUserId = actor.userId;
+    const authPhone = actor.phone;
 
     const admin = createClient(url, serviceRoleKey, {
       auth: { persistSession: false, autoRefreshToken: false },

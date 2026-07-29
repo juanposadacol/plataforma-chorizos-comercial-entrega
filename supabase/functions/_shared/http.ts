@@ -1,24 +1,21 @@
+import {
+  originIsAllowed,
+  parseOriginList,
+  resolveAllowedOrigin,
+  resolveRejectionOrigin,
+} from './origins.ts';
+
 const DEFAULT_ALLOWED_HEADERS =
   'authorization, apikey, content-type, x-client-info, x-idempotency-key';
 
 function configuredOrigins(): string[] {
-  return (Deno.env.get('ALLOWED_ORIGINS') ?? '')
-    .split(',')
-    .map((origin) => origin.trim())
-    .filter(Boolean);
+  return parseOriginList(Deno.env.get('ALLOWED_ORIGINS'));
 }
 
 export function corsHeaders(request: Request): HeadersInit {
-  const origin = request.headers.get('origin') ?? '';
-  const allowed = configuredOrigins();
-  const allowOrigin = allowed.includes(origin)
-    ? origin
-    : allowed.includes('*')
-      ? '*'
-      : (allowed[0] ?? 'null');
-
+  const origin = request.headers.get('origin');
   return {
-    'access-control-allow-origin': allowOrigin,
+    'access-control-allow-origin': resolveAllowedOrigin(origin, configuredOrigins()),
     'access-control-allow-headers': DEFAULT_ALLOWED_HEADERS,
     'access-control-allow-methods': 'POST, OPTIONS',
     'access-control-max-age': '86400',
@@ -26,11 +23,31 @@ export function corsHeaders(request: Request): HeadersInit {
   };
 }
 
+/**
+ * Cabeceras del preflight. Devuelven siempre el origen solicitante porque una
+ * respuesta `OPTIONS` no transporta ningún dato: su único efecto es dejar que el
+ * navegador envíe el POST, que sí pasa por la allowlist. Sin esto, un origen no
+ * autorizado falla en el preflight y el cliente nunca puede leer el motivo.
+ */
+export function preflightHeaders(request: Request): HeadersInit {
+  return {
+    ...corsHeaders(request),
+    'access-control-allow-origin': resolveRejectionOrigin(request.headers.get('origin')),
+  };
+}
+
+/**
+ * Permite que el cliente lea el cuerpo de una respuesta de rechazo. El cuerpo
+ * solo contiene `{ error: { code, message } }`; no autoriza nada.
+ */
+export function readableRejectionHeaders(request: Request): HeadersInit {
+  return {
+    'access-control-allow-origin': resolveRejectionOrigin(request.headers.get('origin')),
+  };
+}
+
 export function isAllowedOrigin(request: Request): boolean {
-  const origin = request.headers.get('origin');
-  if (!origin) return true; // Non-browser/server-to-server requests.
-  const allowed = configuredOrigins();
-  return allowed.includes('*') || allowed.includes(origin);
+  return originIsAllowed(request.headers.get('origin'), configuredOrigins());
 }
 
 export function jsonResponse(

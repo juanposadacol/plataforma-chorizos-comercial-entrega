@@ -34,8 +34,10 @@ export const createOrder = async (request: OrderRequest): Promise<OrderResult> =
   if (error) {
     let code = 'CREATE_ORDER_FAILED';
     let message = 'No pudimos crear el pedido.';
+    let status: number | null = null;
     const context = 'context' in error ? error.context : null;
     if (context instanceof Response) {
+      status = context.status;
       try {
         const payload = (await context.clone().json()) as {
           error?: { code?: string; message?: string };
@@ -45,10 +47,20 @@ export const createOrder = async (request: OrderRequest): Promise<OrderResult> =
       } catch {
         // La respuesta no era JSON; se conserva el mensaje seguro.
       }
+    } else {
+      // Sin `Response` la petición nunca llegó a completarse: CORS o red. El
+      // navegador ya registró el detalle real en la consola.
+      code = 'NETWORK_OR_CORS_ERROR';
+      message = 'No pudimos contactar al servidor. Revisa tu conexión e intenta de nuevo.';
     }
     if (code === 'CUSTOMER_NOT_AUTHORIZED' || code === 'CUSTOMER_AUTH_REQUIRED') {
       message =
         'Este celular ya está registrado. Inicia sesión con el código SMS para usar sus precios.';
+    }
+    // Solo en desarrollo, y solo código y estado: nunca tokens, datos del
+    // cliente ni el cuerpo del pedido.
+    if (import.meta.env.DEV) {
+      console.warn('[createOrder] rechazado', { code, status });
     }
     throw new AppError(message, code, error.message);
   }
