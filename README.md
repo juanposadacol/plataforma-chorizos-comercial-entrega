@@ -14,7 +14,7 @@ Aplicación web en español para vender chorizos artesanales y administrar pedid
 - Kardex, recepción de compras, costo promedio, cartera, caja, auditoría y conservación histórica.
 - Cola de notificaciones y Edge Function para WhatsApp Business Cloud, con enlace manual de respaldo.
 - Exportaciones CSV, Excel compatible (`.xls`) y PDF desde reportes; exportación CSV en listados administrativos compatibles.
-- PWA instalable con caché de recursos estáticos y una pantalla sin conexión. Confirmar precios o pedidos siempre requiere conexión.
+- PWA instalable con caché de recursos estáticos y del app-shell. Confirmar precios o pedidos siempre requiere conexión; ver [PWA y comportamiento sin conexión](#pwa-y-comportamiento-sin-conexión).
 - Migraciones PostgreSQL, RLS, datos de demostración, pruebas unitarias y pruebas de base de datos.
 
 ## Regla de seguridad principal
@@ -27,6 +27,16 @@ El navegador nunca decide el precio final. Solo envía identificadores, cantidad
 4. precio público.
 
 Después valida inventario, guarda el pedido y sus snapshots, reserva existencias y crea la notificación. WhatsApp ocurre después del `commit`; si falla, el pedido permanece guardado.
+
+## PWA y comportamiento sin conexión
+
+El service worker (`vite-plugin-pwa` en modo `generateSW`) usa `index.html` como `navigateFallback`, es decir, como **app-shell** de la SPA. Esa opción de Workbox no elige una pantalla para cuando falta la red: genera una `NavigationRoute` que responde **toda** petición de navegación desde el precaché, haya conexión o no.
+
+Por eso `offline.html` **no debe configurarse como `navigateFallback`**. Hacerlo mostraría la pantalla de error incluso estando en línea, y solo una recarga forzada (`Ctrl` + `Shift` + `R`), que omite el service worker, permitiría entrar a la aplicación.
+
+Consecuencia práctica: sin conexión la aplicación **puede abrir el shell almacenado en caché** y mostrar la interfaz, pero cualquier operación contra Supabase —consultar precios vigentes, validar inventario, iniciar sesión, crear o cambiar un pedido, confirmar un pago— **requiere conexión** y fallará hasta recuperarla. Una pantalla almacenada nunca es una confirmación comercial.
+
+`public/offline.html` se conserva como recurso estático precacheado; ninguna ruta de navegación lo sirve.
 
 ## Tecnologías
 

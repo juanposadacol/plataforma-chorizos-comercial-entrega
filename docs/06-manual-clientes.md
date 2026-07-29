@@ -128,7 +128,7 @@ Pulse **Salir** en el menú, en especial si usa un teléfono compartido. Cerrar 
 
 En navegadores compatibles puede usar **Instalar aplicación** o **Agregar a pantalla de inicio**. La versión instalada conserva el acceso rápido y algunos recursos visuales.
 
-Sin conexión puede aparecer una pantalla básica, pero no es posible:
+Sin conexión, la aplicación puede abrir la pantalla guardada en el dispositivo y mostrar la interfaz, pero no es posible:
 
 - consultar un precio personalizado vigente;
 - validar inventario;
@@ -136,7 +136,7 @@ Sin conexión puede aparecer una pantalla básica, pero no es posible:
 - crear o cambiar un pedido;
 - confirmar un pago.
 
-Espere a recuperar conexión y vuelva a intentar. No interprete una pantalla almacenada como confirmación comercial.
+Todas esas acciones consultan el servidor y fallarán hasta que recupere la conexión. Espere a recuperarla y vuelva a intentar. No interprete una pantalla almacenada como confirmación comercial: lo que ve puede ser información antigua guardada en el dispositivo.
 
 ## 10. Errores frecuentes
 

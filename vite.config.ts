@@ -33,7 +33,11 @@ export default defineConfig({
         ],
       },
       workbox: {
-        navigateFallback: '/offline.html',
+        // App-shell de la SPA. `navigateFallback` no es "pantalla a mostrar sin
+        // conexión": Workbox genera con ella una NavigationRoute que responde
+        // TODA navegación desde el precaché, haya red o no. Apuntarla a
+        // `/offline.html` servía la pantalla de error incluso en línea.
+        navigateFallback: '/index.html',
         globPatterns: ['**/*.{js,css,html,svg,webp,avif,woff2}'],
         runtimeCaching: [
           {
