@@ -1,11 +1,16 @@
+import { useState } from 'react';
+import { Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { Customer, PriceList } from '../types';
 import { formatAdminDate, formatMoney, firstText, toNumber } from '../utils';
 import { useAdminData } from '../useAdminData';
 import { ResourceManager, type ResourceField } from '../components/ResourceManager';
 import { StatusBadge, type TableColumn } from '../components/AdminUi';
+import { DeleteCustomerModal } from './DeleteCustomerModal';
 
 export function CustomerTable() {
+  const [deleting, setDeleting] = useState<Customer | null>(null);
+  const [afterDelete, setAfterDelete] = useState<(() => Promise<void>) | null>(null);
   const { data: priceLists } = useAdminData<PriceList>('price_lists', {
     orderBy: 'name',
     ascending: true,
@@ -21,17 +26,6 @@ export function CustomerTable() {
     { key: 'phone', label: 'Celular', type: 'tel', required: true, placeholder: '300 000 0000' },
     { key: 'whatsapp', label: 'WhatsApp', type: 'tel', placeholder: 'Si es diferente al celular' },
     { key: 'email', label: 'Correo', type: 'email', placeholder: 'cliente@correo.com' },
-    {
-      key: 'document_type',
-      label: 'Tipo de documento',
-      type: 'select',
-      options: [
-        { value: 'CC', label: 'Cédula' },
-        { value: 'NIT', label: 'NIT' },
-        { value: 'CE', label: 'Cédula de extranjería' },
-        { value: 'other', label: 'Otro' },
-      ],
-    },
     { key: 'document_number', label: 'Número de documento' },
     { key: 'address', label: 'Dirección principal', fullWidth: true },
     { key: 'neighborhood', label: 'Barrio' },
@@ -167,20 +161,46 @@ export function CustomerTable() {
     },
   ];
   return (
-    <ResourceManager
-      table="customers"
-      columns={columns}
-      fields={fields}
-      createLabel="Nuevo cliente"
-      modalTitle="Cliente"
-      modalDescription="La lista de precios solo puede asignarse desde administración."
-      emptyTitle="Aún no hay clientes"
-      emptyDescription="Los compradores nuevos se registrarán aquí al guardar su primer pedido."
-      searchPlaceholder="Buscar por nombre, documento o celular…"
-      statusField="status"
-      activeValue="active"
-      inactiveValue="inactive"
-      realtime
-    />
+    <>
+      <ResourceManager
+        table="customers"
+        columns={columns}
+        fields={fields}
+        createLabel="Nuevo cliente"
+        modalTitle="Cliente"
+        modalDescription="La lista de precios solo puede asignarse desde administración."
+        emptyTitle="Aún no hay clientes"
+        emptyDescription="Los compradores nuevos se registrarán aquí al guardar su primer pedido."
+        searchPlaceholder="Buscar por nombre, documento o celular…"
+        statusField="status"
+        activeValue="active"
+        inactiveValue="inactive"
+        realtime
+        rowActions={(customer, reload) => (
+          <button
+            type="button"
+            className="grid h-9 w-9 place-items-center rounded-lg text-artisan-muted hover:bg-red-50 hover:text-red-700"
+            onClick={() => {
+              setDeleting(customer);
+              setAfterDelete(() => reload);
+            }}
+            aria-label={`Eliminar ${firstText(customer, 'full_name', 'name') || 'cliente'}`}
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        )}
+      />
+      {deleting && (
+        <DeleteCustomerModal
+          open
+          customer={deleting}
+          onClose={() => setDeleting(null)}
+          onDeleted={async () => {
+            await afterDelete?.();
+            setDeleting(null);
+          }}
+        />
+      )}
+    </>
   );
 }

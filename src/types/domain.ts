@@ -1,3 +1,5 @@
+import type { PackSize } from '../domain/packs';
+
 export type UUID = string;
 
 export interface Category {
@@ -28,6 +30,8 @@ export interface Product {
 export interface CartItem {
   productId: UUID;
   quantity: number;
+  /** Presentación elegida por el cliente (3, 4, 6 o 10 unidades). */
+  packSize?: PackSize;
 }
 
 export interface CheckoutValues {
@@ -40,7 +44,6 @@ export interface CheckoutValues {
   paymentMethodId: UUID;
   requestedDate: string;
   notes: string;
-  privacyAccepted: boolean;
 }
 
 export interface OrderRequest {

@@ -1,12 +1,21 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { CalendarDays, LoaderCircle, MapPin, ShieldCheck, UserRound } from 'lucide-react';
-import { useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { useEffect, useRef, useState } from 'react';
+import { useForm, useWatch } from 'react-hook-form';
+import { useAuth } from '../../features/auth/AuthContext';
+import { loadCustomerProfile, type CustomerProfile } from '../../features/orders/customerProfile';
 import { checkoutSchema, type CheckoutFormValues } from '../../features/orders/checkoutSchema';
 import { localDateInBogota } from '../../lib/format';
 import type { SelectOption } from '../../types/domain';
 import { DeliverySelector } from './DeliverySelector';
 import { PaymentMethodSelector } from './PaymentMethodSelector';
+
+/** Campos que se llenan solos cuando el celular corresponde a un cliente conocido. */
+const AUTOFILL_FIELDS = ['customerName', 'address', 'neighborhood', 'municipality'] as const;
+type AutofillField = (typeof AUTOFILL_FIELDS)[number];
+
+const isCompletePhone = (value: string): boolean =>
+  /^(?:\+?57)?3\d{9}$/.test(value.replace(/[\s()-]/g, ''));
 
 interface CheckoutFormProps {
   disabled: boolean;
@@ -25,10 +34,13 @@ export function CheckoutForm({
   deliveryMethods,
   onSubmit,
 }: CheckoutFormProps) {
+  const { user } = useAuth();
   const {
     register,
     handleSubmit,
     setValue,
+    getValues,
+    control,
     formState: { errors },
   } = useForm<CheckoutFormValues>({
     resolver: zodResolver(checkoutSchema),
@@ -40,7 +52,6 @@ export function CheckoutForm({
       municipality: '',
       requestedDate: localDateInBogota(1),
       notes: '',
-      privacyAccepted: false,
     },
   });
 
@@ -48,6 +59,52 @@ export function CheckoutForm({
     if (deliveryMethods[0]) setValue('deliveryMethodId', deliveryMethods[0].id);
     if (paymentMethods[0]) setValue('paymentMethodId', paymentMethods[0].id);
   }, [deliveryMethods, paymentMethods, setValue]);
+
+  const phone = useWatch({ control, name: 'customerPhone' });
+  const [autofillNotice, setAutofillNotice] = useState('');
+  // Recuerda qué escribió la autocarga para poder reemplazarlo si cambia el
+  // celular, sin pisar nunca lo que el cliente haya escrito a mano.
+  const autofilled = useRef<Partial<Record<AutofillField, string>>>({});
+
+  useEffect(() => {
+    const complete = isCompletePhone(phone ?? '');
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      if (!complete) {
+        setAutofillNotice('');
+        return;
+      }
+      void loadCustomerProfile(phone, Boolean(user)).then((profile: CustomerProfile | null) => {
+        if (cancelled) return;
+        if (!profile) {
+          setAutofillNotice('');
+          return;
+        }
+        const values: Record<AutofillField, string> = {
+          customerName: profile.name,
+          address: profile.address,
+          neighborhood: profile.neighborhood,
+          municipality: profile.municipality,
+        };
+        let filled = 0;
+        AUTOFILL_FIELDS.forEach((field) => {
+          const next = values[field];
+          const current = String(getValues(field) ?? '');
+          const editedByCustomer = current !== '' && current !== autofilled.current[field];
+          if (!next || editedByCustomer) return;
+          setValue(field, next, { shouldValidate: true });
+          autofilled.current[field] = next;
+          filled += 1;
+        });
+        if (filled)
+          setAutofillNotice('Cargamos tus datos guardados. Revísalos antes de confirmar.');
+      });
+    }, 400);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [phone, user, getValues, setValue]);
 
   const fieldError = (name: keyof CheckoutFormValues) =>
     errors[name] ? (
@@ -76,6 +133,20 @@ export function CheckoutForm({
         </h3>
         <div className="form-grid">
           <label>
+            Celular
+            <input
+              type="tel"
+              inputMode="numeric"
+              autoComplete="tel"
+              autoFocus
+              {...register('customerPhone')}
+              aria-invalid={Boolean(errors.customerPhone)}
+              aria-describedby={errors.customerPhone ? 'customerPhone-error' : undefined}
+              placeholder="300 123 4567"
+            />
+            {fieldError('customerPhone')}
+          </label>
+          <label>
             Nombre completo
             <input
               autoComplete="name"
@@ -86,20 +157,12 @@ export function CheckoutForm({
             />
             {fieldError('customerName')}
           </label>
-          <label>
-            Celular
-            <input
-              type="tel"
-              inputMode="numeric"
-              autoComplete="tel"
-              {...register('customerPhone')}
-              aria-invalid={Boolean(errors.customerPhone)}
-              aria-describedby={errors.customerPhone ? 'customerPhone-error' : undefined}
-              placeholder="300 123 4567"
-            />
-            {fieldError('customerPhone')}
-          </label>
         </div>
+        {autofillNotice && (
+          <p className="autofill-notice" role="status">
+            {autofillNotice}
+          </p>
+        )}
       </section>
       <section className="form-section" aria-labelledby="address-section">
         <h3 id="address-section">
@@ -175,17 +238,6 @@ export function CheckoutForm({
           </label>
         </div>
       </section>
-      <label className="privacy-check">
-        <input type="checkbox" {...register('privacyAccepted')} />
-        <span>
-          Acepto el tratamiento de mis datos para gestionar este pedido.{' '}
-          <a href="/privacidad" target="_blank">
-            Ver política
-          </a>
-          .
-        </span>
-      </label>
-      {fieldError('privacyAccepted')}
       {error && (
         <div className="form-submit-error" role="alert">
           {error}

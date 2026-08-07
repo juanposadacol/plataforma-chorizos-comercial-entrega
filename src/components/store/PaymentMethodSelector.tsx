@@ -1,4 +1,4 @@
-import { Banknote, CreditCard, Smartphone } from 'lucide-react';
+import { Banknote, Smartphone } from 'lucide-react';
 import type { FieldError, UseFormRegister } from 'react-hook-form';
 import type { CheckoutFormValues } from '../../features/orders/checkoutSchema';
 import type { SelectOption } from '../../types/domain';
@@ -12,11 +12,11 @@ export function PaymentMethodSelector({
   register: UseFormRegister<CheckoutFormValues>;
   error?: FieldError;
 }) {
-  const icons = [Banknote, Smartphone, CreditCard];
+  const icons = [Banknote, Smartphone];
   return (
     <fieldset className="option-fieldset" aria-describedby={error ? 'payment-error' : undefined}>
       <legend>Forma de pago</legend>
-      <div className="option-grid option-grid--three">
+      <div className="option-grid">
         {options.map((option, index) => {
           const Icon = icons[index % icons.length] ?? Banknote;
           return (

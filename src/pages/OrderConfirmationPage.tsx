@@ -1,5 +1,4 @@
-import { CheckCircle2, Copy, ExternalLink, Home, MessageCircle, PackageCheck } from 'lucide-react';
-import { useState } from 'react';
+import { CheckCircle2, ExternalLink, MessageCircle, PackageCheck } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { formatMoney } from '../lib/format';
 import type { OrderResult } from '../types/domain';
@@ -7,7 +6,6 @@ import type { OrderResult } from '../types/domain';
 export function OrderConfirmationPage() {
   const { state } = useLocation();
   const order = (state as { order?: OrderResult } | null)?.order;
-  const [copied, setCopied] = useState(false);
   if (!order)
     return (
       <main className="center-page">
@@ -19,11 +17,6 @@ export function OrderConfirmationPage() {
         </Link>
       </main>
     );
-  const trackingUrl = `${window.location.origin}/seguir/${order.tracking_token}`;
-  const copy = async () => {
-    await navigator.clipboard.writeText(trackingUrl);
-    setCopied(true);
-  };
   return (
     <main className="confirmation-page">
       <section className="confirmation-card">
@@ -44,28 +37,8 @@ export function OrderConfirmationPage() {
           <span>Total autorizado</span>
           <strong>{formatMoney(order.total)}</strong>
         </div>
-        <dl className="confirmation-details">
-          <div>
-            <dt>Estado</dt>
-            <dd>{order.status}</dd>
-          </div>
-          <div>
-            <dt>Pago</dt>
-            <dd>{order.payment_status}</dd>
-          </div>
-          <div>
-            <dt>Notificación</dt>
-            <dd>{order.notification_status ?? 'Pendiente'}</dd>
-          </div>
-        </dl>
-        <div className="confirmation-actions">
-          <Link className="primary-button" to={`/seguir/${order.tracking_token}`}>
-            <PackageCheck /> Ver seguimiento
-          </Link>
-          <button className="secondary-button" onClick={() => void copy()}>
-            <Copy /> {copied ? 'Enlace copiado' : 'Copiar enlace'}
-          </button>
-          {order.manual_whatsapp_url && (
+        {order.manual_whatsapp_url && (
+          <div className="confirmation-actions">
             <a
               className="whatsapp-button"
               href={order.manual_whatsapp_url}
@@ -74,11 +47,8 @@ export function OrderConfirmationPage() {
             >
               <MessageCircle /> Avisar por WhatsApp <ExternalLink />
             </a>
-          )}
-          <Link className="text-link" to="/">
-            <Home /> Volver a la tienda
-          </Link>
-        </div>
+          </div>
+        )}
       </section>
     </main>
   );

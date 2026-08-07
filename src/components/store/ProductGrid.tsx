@@ -1,4 +1,5 @@
 import { Search } from 'lucide-react';
+import { DEFAULT_PACK_SIZE, type PackSize } from '../../domain/packs';
 import type { Product } from '../../types/domain';
 import { EmptyState } from '../ui/AsyncState';
 import { ProductCard } from './ProductCard';
@@ -6,11 +7,20 @@ import { ProductCard } from './ProductCard';
 interface ProductGridProps {
   products: Product[];
   quantities: Record<string, number>;
+  packSizes: Record<string, PackSize>;
   onIncrement: (id: string) => void;
   onDecrement: (id: string) => void;
+  onPackSize: (id: string, packSize: PackSize) => void;
 }
 
-export function ProductGrid({ products, quantities, onIncrement, onDecrement }: ProductGridProps) {
+export function ProductGrid({
+  products,
+  quantities,
+  packSizes,
+  onIncrement,
+  onDecrement,
+  onPackSize,
+}: ProductGridProps) {
   if (!products.length)
     return (
       <EmptyState title="No encontramos productos" message="Prueba otra búsqueda o categoría." />
@@ -22,8 +32,10 @@ export function ProductGrid({ products, quantities, onIncrement, onDecrement }: 
           key={product.id}
           product={product}
           quantity={quantities[product.id] ?? 0}
+          packSize={packSizes[product.id] ?? DEFAULT_PACK_SIZE}
           onIncrement={() => onIncrement(product.id)}
           onDecrement={() => onDecrement(product.id)}
+          onPackSize={(packSize) => onPackSize(product.id, packSize)}
         />
       ))}
     </div>

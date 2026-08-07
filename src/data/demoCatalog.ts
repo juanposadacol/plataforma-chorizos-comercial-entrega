@@ -64,10 +64,8 @@ export const demoProducts: Product[] = [
 export const demoPaymentMethods: SelectOption[] = [
   { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1', name: 'Efectivo' },
   { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2', name: 'Transferencia' },
-  { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3', name: 'Contraentrega' },
 ];
 
 export const demoDeliveryMethods: SelectOption[] = [
   { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1', name: 'Domicilio', fee: 0 },
-  { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2', name: 'Recoger en el negocio', fee: 0 },
 ];

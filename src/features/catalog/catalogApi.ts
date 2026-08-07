@@ -37,6 +37,25 @@ export const getCatalog = async (): Promise<Product[]> => {
   return ((data ?? []) as Record<string, unknown>[]).map(mapProduct);
 };
 
+/** La tienda solo ofrece efectivo y transferencia. */
+const ALLOWED_PAYMENT_CODES = ['efectivo', 'transferencia'];
+const ALLOWED_PAYMENT_NAMES = /^(efectivo|transferencia)/i;
+/** La tienda ya no ofrece recoger en el negocio: todo se entrega a domicilio. */
+const EXCLUDED_DELIVERY_CODES = ['recoger'];
+const EXCLUDED_DELIVERY_NAMES = /recog|retir|tienda|negocio|punto de venta/i;
+
+const isAllowedPayment = (row: { code?: unknown; name?: unknown }) => {
+  const code = String(row.code ?? '').toLowerCase();
+  if (code) return ALLOWED_PAYMENT_CODES.includes(code);
+  return ALLOWED_PAYMENT_NAMES.test(String(row.name ?? ''));
+};
+
+const isAllowedDelivery = (row: { code?: unknown; name?: unknown }) => {
+  const code = String(row.code ?? '').toLowerCase();
+  if (code) return !EXCLUDED_DELIVERY_CODES.includes(code);
+  return !EXCLUDED_DELIVERY_NAMES.test(String(row.name ?? ''));
+};
+
 export const getCheckoutOptions = async (): Promise<{
   paymentMethods: SelectOption[];
   deliveryMethods: SelectOption[];
@@ -50,24 +69,24 @@ export const getCheckoutOptions = async (): Promise<{
   const [payments, deliveries] = await Promise.all([
     supabase
       .from('payment_methods')
-      .select('id,name,description')
+      .select('id,code,name,description')
       .eq('is_active', true)
       .order('sort_order'),
     supabase
       .from('delivery_methods')
-      .select('id,name,description,fee')
+      .select('id,code,name,description,fee')
       .eq('is_active', true)
       .order('sort_order'),
   ]);
   if (payments.error) throw payments.error;
   if (deliveries.error) throw deliveries.error;
   return {
-    paymentMethods: (payments.data ?? []).map((row) => ({
+    paymentMethods: (payments.data ?? []).filter(isAllowedPayment).map((row) => ({
       id: String(row.id),
       name: String(row.name),
       description: row.description ? String(row.description) : null,
     })),
-    deliveryMethods: (deliveries.data ?? []).map((row) => ({
+    deliveryMethods: (deliveries.data ?? []).filter(isAllowedDelivery).map((row) => ({
       id: String(row.id),
       name: String(row.name),
       description: row.description ? String(row.description) : null,

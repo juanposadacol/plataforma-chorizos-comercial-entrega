@@ -178,6 +178,26 @@ export const describeOrderDeletionError = (raw: string): string => {
   return 'No fue posible eliminar el pedido.';
 };
 
+export const describeCustomerDeletionError = (raw: string): string => {
+  const table: Array<[string, string]> = [
+    ['CUSTOMER_NOT_FOUND', 'El cliente ya no existe. Actualiza la lista.'],
+    ['NOT_AUTHENTICATED', 'Tu sesión expiró. Vuelve a iniciar sesión.'],
+    ['NOT_AUTHORIZED', 'Solo un superadministrador puede eliminar clientes definitivamente.'],
+    ['CONFIRMATION_MISMATCH', 'El celular escrito no coincide con el del cliente.'],
+    [
+      'CUSTOMER_HAS_ORDERS',
+      'El cliente tiene pedidos registrados. Elimina primero sus pedidos o desactívalo.',
+    ],
+    ['CUSTOMER_HAS_PAYMENT', 'El cliente tiene pagos registrados y no puede eliminarse.'],
+    ['CUSTOMER_HAS_RECEIVABLE', 'El cliente tiene cartera registrada y no puede eliminarse.'],
+    ['CUSTOMER_LOCKED', 'Otra persona está modificando este cliente. Intenta de nuevo.'],
+  ];
+  for (const [code, message] of table) {
+    if (raw.includes(code)) return message;
+  }
+  return 'No fue posible eliminar el cliente.';
+};
+
 export const orderStatusLabels: Record<string, string> = {
   new: 'Nuevo',
   pending_confirmation: 'Por confirmar',

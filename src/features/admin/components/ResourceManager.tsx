@@ -53,6 +53,8 @@ interface ResourceManagerProps<T extends AdminRecord> {
   beforeSave?: (values: Record<string, unknown>, editing: T | null) => Record<string, unknown>;
   toolbarExtra?: ReactNode;
   renderDetails?: (row: T) => ReactNode;
+  /** Acciones adicionales por fila (por ejemplo eliminar). Recibe `reload` para refrescar. */
+  rowActions?: (row: T, reload: () => Promise<void>) => ReactNode;
 }
 
 const initialValues = (
@@ -85,6 +87,7 @@ export function ResourceManager<T extends AdminRecord>({
   beforeSave,
   toolbarExtra,
   renderDetails,
+  rowActions,
 }: ResourceManagerProps<T>) {
   const { data, loading, refreshing, error, reload } = useAdminData<T>(
     table,
@@ -167,7 +170,7 @@ export function ResourceManager<T extends AdminRecord>({
   const actionColumn: TableColumn<T> = {
     key: 'actions',
     header: 'Acciones',
-    className: 'w-36',
+    className: 'w-44',
     render: (row) => (
       <div className="flex justify-end gap-1" onClick={(event) => event.stopPropagation()}>
         <button
@@ -188,6 +191,7 @@ export function ResourceManager<T extends AdminRecord>({
             <Power className="h-4 w-4" />
           </button>
         )}
+        {rowActions?.(row, reload)}
       </div>
     ),
   };

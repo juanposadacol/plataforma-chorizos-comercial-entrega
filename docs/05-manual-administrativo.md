@@ -61,8 +61,9 @@ Incluye ventas, pedidos por estado, ticket promedio, utilidad bruta y neta, reca
 Interpretación básica:
 
 - **Ventas** no equivale a efectivo recibido.
-- **Utilidad bruta** descuenta el costo histórico de venta.
+- **Utilidad bruta** descuenta el costo de reposición: para cada línea entregada se usa el **costo unitario promedio de la semana de compras anterior** (valor pagado ÷ cantidad). Si un producto no se compró esa semana se toma la última semana con compras; si nunca se ha comprado, se conserva el costo registrado en el pedido.
 - **Utilidad neta** descuenta además los gastos operativos registrados.
+- Los reportes por día y por producto (`/admin/reportes`) siguen usando el costo congelado en el momento de la entrega, así que pueden diferir del resumen. La métrica `net_profit_recorded` conserva esa lectura anterior para comparar.
 - **Recaudado** corresponde a pagos válidos del período.
 - **Por cobrar** es un saldo comercial y no un ingreso de caja.
 
@@ -115,6 +116,8 @@ El acceso normal de clientes usa OTP de Supabase. Si la instalación conserva un
 
 Para retirar un cliente de la operación, use desactivación. No elimine físicamente registros vinculados a pedidos o saldos.
 
+**Eliminar definitivamente.** El botón de papelera de cada fila abre la eliminación definitiva, pensada para clientes creados por error o durante pruebas. Requiere rol **superadministrador**, escribir el celular del cliente como confirmación y que el cliente **no tenga pedidos, pagos ni cartera**; si los tiene, el servidor rechaza la operación y debe desactivarlo. La eliminación borra en una sola transacción sus direcciones, precios especiales, notificaciones y la auditoría que contiene sus datos personales, y deja solo una huella técnica sin contenido.
+
 ## 7. Productos
 
 En `/admin/productos` gestione SKU, nombre, slug, descripciones, categoría, marca, imagen, presentación, unidad, precio público, costos, mínimo, estado y si admite venta sin stock.
@@ -140,7 +143,7 @@ Cree y desactive listas comerciales. Marque solo una como pública y asigne a ca
 
 ### Matriz de productos
 
-Defina el precio de cada producto por lista y su vigencia. La matriz permite guardar varios precios en una operación. Antes de activar una lista, confirme que todos los productos vendibles tengan precio; si falta uno, el servidor caerá al precio público.
+Defina el precio de cada producto por lista. La matriz muestra el precio vigente hoy y al guardar solo escribe los que realmente cambiaron: si ya existe una versión con la fecha de hoy la actualiza y, si no, crea una versión nueva con vigencia desde hoy. Las versiones anteriores quedan como historial y los pedidos ya creados no se alteran. Antes de activar una lista, confirme que todos los productos vendibles tengan precio; si falta uno, el servidor caerá al precio público.
 
 ### Precios especiales
 
@@ -175,10 +178,12 @@ Primero cree el proveedor en `/admin/proveedores`, incluyendo NIT, contacto y co
 En `/admin/compras`:
 
 1. cree la compra y seleccione proveedor;
-2. agregue productos, cantidades y costos verificados;
-3. registre factura, fechas, descuentos, impuestos y pagos;
+2. agregue productos con la **cantidad** recibida y el **valor pagado** por esa línea; el sistema calcula el **costo unitario** (valor pagado ÷ cantidad) y lo muestra en la línea;
+3. registre factura, fechas, descuentos, impuestos y el abono al proveedor;
 4. guarde la compra;
 5. use **Recibir** solo al comprobar físicamente la mercancía.
+
+Ese costo unitario es el que alimenta el costo promedio del inventario y el promedio semanal con el que se calcula la utilidad, así que debe corresponder a lo realmente pagado esa semana.
 
 La recepción transaccional incrementa existencias, crea movimientos, recalcula el costo promedio ponderado y, si queda saldo, crea la cuenta por pagar. Repetir una recepción ya completada no debe duplicar existencias.
 

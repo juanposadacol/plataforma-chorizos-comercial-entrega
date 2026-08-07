@@ -1,7 +1,8 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { CheckCircle2, PackageCheck, Plus, Save, Trash2 } from 'lucide-react';
 import type { AdminProduct, Purchase, Supplier } from '../../features/admin/types';
-import { insertRecord, invokeAdminRpc, upsertRecords } from '../../features/admin/adminService';
+import { insertRecord, invokeAdminRpc } from '../../features/admin/adminService';
+import { lineAmounts, purchaseTotals, round2 } from '../../features/admin/purchases/purchaseMath';
 import { useAdminData } from '../../features/admin/useAdminData';
 import {
   firstText,
@@ -31,7 +32,8 @@ interface PurchaseLine {
   key: string;
   product_id: string;
   quantity: string;
-  unit_cost: string;
+  /** Lo que se pagó por toda la línea; el costo unitario se calcula con la cantidad. */
+  paid_amount: string;
   discount_amount: string;
   tax_amount: string;
 }
@@ -39,7 +41,7 @@ const emptyLine = (): PurchaseLine => ({
   key: crypto.randomUUID(),
   product_id: '',
   quantity: '1',
-  unit_cost: '',
+  paid_amount: '',
   discount_amount: '0',
   tax_amount: '0',
 });
@@ -91,21 +93,10 @@ export function PurchasesPage() {
       ),
     [purchasesState.data, search, status, supplierById],
   );
-  const totals = useMemo(
-    () =>
-      lines.reduce(
-        (acc, line) => {
-          const base = toNumber(line.quantity) * toNumber(line.unit_cost);
-          acc.subtotal += base;
-          acc.discount += toNumber(line.discount_amount);
-          acc.tax += toNumber(line.tax_amount);
-          return acc;
-        },
-        { subtotal: 0, discount: 0, tax: 0 },
-      ),
-    [lines],
-  );
-  const grandTotal = totals.subtotal - totals.discount + totals.tax;
+  const totals = useMemo(() => purchaseTotals(lines), [lines]);
+  const grandTotal = totals.total;
+  // `purchases.paid_amount <= total_amount` es una restricción de la base.
+  const paidToSupplier = Math.min(round2(toNumber(form.amount_paid)), grandTotal);
 
   const openCreate = () => {
     setForm({
@@ -130,10 +121,11 @@ export function PurchasesPage() {
     if (
       !lines.length ||
       lines.some(
-        (line) => !line.product_id || toNumber(line.quantity) <= 0 || toNumber(line.unit_cost) < 0,
+        (line) =>
+          !line.product_id || toNumber(line.quantity) <= 0 || toNumber(line.paid_amount) <= 0,
       )
     ) {
-      setError('Completa al menos un producto con cantidad y costo válidos.');
+      setError('Completa cada línea con producto, cantidad y valor pagado.');
       return;
     }
     setSaving(true);
@@ -148,26 +140,29 @@ export function PurchasesPage() {
         discount_amount: totals.discount,
         tax_amount: totals.tax,
         total_amount: grandTotal,
-        paid_amount: Number(form.amount_paid || 0),
-        balance_amount: Math.max(0, grandTotal - Number(form.amount_paid || 0)),
+        paid_amount: paidToSupplier,
+        balance_amount: round2(grandTotal - paidToSupplier),
         due_date: form.due_date || null,
         notes: form.notes || null,
       });
-      await upsertRecords(
-        'purchase_items',
-        lines.map((line) => ({
+      // `purchase_items` exige sku y product_name (copia histórica del producto)
+      // y las columnas subtotal_amount / total_amount, no "subtotal".
+      for (const line of lines) {
+        const amounts = lineAmounts(line);
+        const product = productsState.data.find((item) => item.id === line.product_id);
+        await insertRecord('purchase_items', {
           purchase_id: purchase.id,
           product_id: line.product_id,
-          quantity: Number(line.quantity),
-          unit_cost: Number(line.unit_cost),
-          discount_amount: Number(line.discount_amount || 0),
-          tax_amount: Number(line.tax_amount || 0),
-          subtotal:
-            toNumber(line.quantity) * toNumber(line.unit_cost) -
-            toNumber(line.discount_amount) +
-            toNumber(line.tax_amount),
-        })),
-      );
+          sku: String(product?.sku ?? ''),
+          product_name: String(product?.name ?? ''),
+          quantity: amounts.quantity,
+          unit_cost: amounts.unitCost,
+          subtotal_amount: amounts.subtotal,
+          discount_amount: amounts.discount,
+          tax_amount: amounts.tax,
+          total_amount: amounts.total,
+        });
+      }
       setModalOpen(false);
       setSuccess(
         'Compra creada en borrador. Recíbela cuando la mercancía entre físicamente a bodega.',
@@ -429,7 +424,7 @@ export function PurchasesPage() {
               {lines.map((line, index) => (
                 <div
                   key={line.key}
-                  className="grid gap-3 p-4 lg:grid-cols-[2fr_repeat(4,1fr)_40px]"
+                  className="grid gap-3 p-4 lg:grid-cols-[2fr_repeat(5,1fr)_40px]"
                 >
                   <label>
                     <span className={labelClass}>Producto {index + 1}</span>
@@ -460,17 +455,26 @@ export function PurchasesPage() {
                     />
                   </label>
                   <label>
-                    <span className={labelClass}>Costo unitario</span>
+                    <span className={labelClass}>Valor pagado</span>
                     <input
                       required
                       type="number"
                       min="0"
                       step="50"
                       className={inputClass}
-                      value={line.unit_cost}
-                      onChange={(event) => updateLine(line.key, 'unit_cost', event.target.value)}
+                      value={line.paid_amount}
+                      onChange={(event) => updateLine(line.key, 'paid_amount', event.target.value)}
                     />
                   </label>
+                  <div>
+                    <span className={labelClass}>Costo unitario</span>
+                    <p
+                      className="flex min-h-11 items-center rounded-xl border border-artisan-line bg-artisan-paper px-3.5 py-2.5 font-black"
+                      aria-live="polite"
+                    >
+                      {formatMoney(lineAmounts(line).unitCost)}
+                    </p>
+                  </div>
                   <label>
                     <span className={labelClass}>Descuento</span>
                     <input
@@ -524,11 +528,12 @@ export function PurchasesPage() {
               </label>
               <div className="grid gap-4 sm:grid-cols-2">
                 <label>
-                  <span className={labelClass}>Valor pagado</span>
+                  <span className={labelClass}>Abono al proveedor</span>
                   <input
                     type="number"
                     min="0"
                     step="100"
+                    max={grandTotal}
                     className={inputClass}
                     value={form.amount_paid}
                     onChange={(event) =>
@@ -569,9 +574,7 @@ export function PurchasesPage() {
               </div>
               <div className="flex justify-between">
                 <dt className="text-white/65">Saldo</dt>
-                <dd className="font-bold">
-                  {formatMoney(Math.max(0, grandTotal - Number(form.amount_paid || 0)))}
-                </dd>
+                <dd className="font-bold">{formatMoney(round2(grandTotal - paidToSupplier))}</dd>
               </div>
             </dl>
           </div>

@@ -12,8 +12,10 @@ import { CartSummary } from '../components/store/CartSummary';
 import { ErrorState, LoadingState } from '../components/ui/AsyncState';
 import { useAuth } from '../features/auth/AuthContext';
 import { useCart } from '../features/cart/CartContext';
+import { buildPackNote, DEFAULT_PACK_SIZE } from '../domain/packs';
 import { getCatalog, getCheckoutOptions, getPublicSettings } from '../features/catalog/catalogApi';
 import type { CheckoutFormValues } from '../features/orders/checkoutSchema';
+import { saveLocalProfile } from '../features/orders/customerProfile';
 import { createOrder } from '../features/orders/orderApi';
 import { env, isSupabaseConfigured } from '../lib/env';
 import { AppError, getErrorMessage } from '../lib/errors';
@@ -23,7 +25,8 @@ export function StorefrontPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const { quantities, units, increment, decrement, setQuantity, clear } = useCart();
+  const { quantities, packSizes, units, increment, decrement, setPackSize, setQuantity, clear } =
+    useCart();
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('Todos');
   const [loginOpen, setLoginOpen] = useState(false);
@@ -60,6 +63,16 @@ export function StorefrontPage() {
       setSubmitError('Agrega al menos un producto.');
       return;
     }
+    // La presentación (3, 4, 6 o 10 unidades) no cambia precio ni inventario:
+    // viaja con el pedido para que el negocio sepa cómo empacar cada línea.
+    const packNote = buildPackNote(
+      items.map((item) => ({
+        name: products.find((product) => product.id === item.product_id)?.name ?? 'Producto',
+        quantity: item.quantity,
+        packSize: packSizes[item.product_id] ?? DEFAULT_PACK_SIZE,
+      })),
+    );
+    const notes = [packNote, values.notes.trim()].filter(Boolean).join('\n').slice(0, 1000);
     setSubmitting(true);
     setSubmitError('');
     try {
@@ -78,7 +91,15 @@ export function StorefrontPage() {
           requested_date: values.requestedDate,
         },
         payment_method_id: values.paymentMethodId,
-        notes: values.notes,
+        notes,
+      });
+      // Memoria del dispositivo: la próxima vez basta con escribir el celular.
+      saveLocalProfile({
+        phone: normalizeColombianPhone(values.customerPhone),
+        name: values.customerName.trim(),
+        address: values.address.trim(),
+        neighborhood: values.neighborhood.trim(),
+        municipality: values.municipality.trim(),
       });
       clear();
       await queryClient.invalidateQueries({ queryKey: ['catalog'] });
@@ -132,7 +153,7 @@ export function StorefrontPage() {
               </p>
             </div>
             <span className="availability-pill">
-              <DatabaseZap aria-hidden="true" /> Inventario en línea
+              <DatabaseZap aria-hidden="true" /> Pedidos en línea
             </span>
           </div>
           {catalog.isLoading ? (
@@ -158,8 +179,10 @@ export function StorefrontPage() {
               <ProductGrid
                 products={filtered}
                 quantities={quantities}
+                packSizes={packSizes}
                 onIncrement={increment}
                 onDecrement={decrement}
+                onPackSize={setPackSize}
               />
             </>
           )}
@@ -185,6 +208,7 @@ export function StorefrontPage() {
             <CartSummary
               products={products}
               quantities={quantities}
+              packSizes={packSizes}
               deliveryMethod={checkoutOptions.data?.deliveryMethods[0]}
               onRemove={(id) => setQuantity(id, 0)}
             />

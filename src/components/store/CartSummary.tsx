@@ -1,15 +1,18 @@
 import { ArrowRight, LockKeyhole, ShoppingBag, Trash2 } from 'lucide-react';
+import { DEFAULT_PACK_SIZE, packSizeLabel, type PackSize } from '../../domain/packs';
 import { formatMoney } from '../../lib/format';
 import type { Product, SelectOption } from '../../types/domain';
 
 export function CartSummary({
   products,
   quantities,
+  packSizes,
   deliveryMethod,
   onRemove,
 }: {
   products: Product[];
   quantities: Record<string, number>;
+  packSizes: Record<string, PackSize>;
   deliveryMethod?: SelectOption;
   onRemove: (id: string) => void;
 }) {
@@ -46,6 +49,9 @@ export function CartSummary({
                 <strong>{product.name}</strong>
                 <span>
                   {quantities[product.id]} × {formatMoney(product.effective_price)}
+                </span>
+                <span className="summary-pack">
+                  {packSizeLabel(packSizes[product.id] ?? DEFAULT_PACK_SIZE)}
                 </span>
               </div>
               <div className="summary-product-total">

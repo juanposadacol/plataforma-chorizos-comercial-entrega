@@ -8,9 +8,11 @@ import type {
   PriceList,
   ProductPrice,
 } from '../types';
-import { insertRecord, updateRecord, upsertRecords } from '../adminService';
+import { insertRecord, updateRecord } from '../adminService';
 import { useAdminData } from '../useAdminData';
 import { firstText, formatAdminDate, formatMoney, matchesSearch, toNumber } from '../utils';
+import { localDateInBogota } from '../../../lib/format';
+import { changedPrices, findTodayRow, pickEffectivePrices } from './priceMatrix';
 import {
   Button,
   EmptyState,
@@ -32,13 +34,13 @@ interface QuantityTier extends Record<string, unknown> {
   id: string;
   product_id: string;
   price_list_id: string;
-  min_quantity: number;
-  max_quantity?: number | null;
+  minimum_quantity: number;
+  maximum_quantity?: number | null;
   unit_price: number;
   valid_from?: string | null;
   valid_until?: string | null;
   status?: string;
-  active?: boolean;
+  is_active?: boolean;
 }
 interface AuditEntry extends Record<string, unknown> {
   id: string;
@@ -97,15 +99,23 @@ export function PriceListEditor() {
     if (!selectedId && listsState.data[0]) setSelectedId(listsState.data[0].id);
   }, [listsState.data, selectedId]);
 
+  // Fecha de negocio en Bogotá: es la que usa el servidor para resolver precios.
+  const today = localDateInBogota();
+  const effectivePrices = useMemo(
+    () => pickEffectivePrices(pricesState.data, selectedId, today),
+    [pricesState.data, selectedId, today],
+  );
+
   useEffect(() => {
-    const values: Record<string, string> = {};
-    pricesState.data
-      .filter((price) => price.price_list_id === selectedId && price.active !== false)
-      .forEach((price) => {
-        values[price.product_id] = String(price.price);
-      });
-    setDraftPrices(values);
-  }, [pricesState.data, selectedId]);
+    setDraftPrices(
+      Object.fromEntries(
+        Object.entries(effectivePrices).map(([productId, price]) => [
+          productId,
+          String(toNumber(price.unit_price)),
+        ]),
+      ),
+    );
+  }, [effectivePrices]);
 
   const selectedList = listsState.data.find((list) => list.id === selectedId);
   const filteredProducts = useMemo(
@@ -179,22 +189,18 @@ export function PriceListEditor() {
         is_public: false,
         is_active: true,
       });
-      const sourcePrices = pricesState.data.filter(
-        (price) => price.price_list_id === list.id && price.active !== false,
-      );
-      if (sourcePrices.length)
-        await upsertRecords(
-          'product_prices',
-          sourcePrices.map((price) => ({
-            price_list_id: created.id,
-            product_id: price.product_id,
-            price: price.price,
-            valid_from: price.valid_from,
-            valid_until: price.valid_until,
-            active: true,
-          })),
-          'price_list_id,product_id',
-        );
+      const sourcePrices = Object.values(pickEffectivePrices(pricesState.data, list.id, today));
+      // Una fila por producto con `valid_from` de hoy: el índice único de
+      // `product_prices` es (lista, producto, variante, valid_from).
+      for (const price of sourcePrices) {
+        await insertRecord('product_prices', {
+          price_list_id: created.id,
+          product_id: price.product_id,
+          unit_price: toNumber(price.unit_price),
+          valid_from: today,
+          is_active: true,
+        });
+      }
       setSelectedId(created.id);
       notify('Lista duplicada con todos sus precios.');
       await Promise.all([listsState.reload(), pricesState.reload()]);
@@ -206,19 +212,33 @@ export function PriceListEditor() {
   };
   const saveMatrix = async () => {
     if (!selectedId) return;
-    const rows = productsState.data
-      .filter((product) => draftPrices[product.id] !== undefined && draftPrices[product.id] !== '')
-      .map((product) => ({
-        price_list_id: selectedId,
-        product_id: product.id,
-        price: Number(draftPrices[product.id]),
-        active: true,
-      }));
+    const changes = changedPrices(draftPrices, effectivePrices);
+    if (!changes.length) {
+      notify('No hay cambios de precio para guardar.');
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
-      await upsertRecords('product_prices', rows, 'price_list_id,product_id');
-      notify(`${rows.length} precios actualizados.`);
+      // Tabla versionada: se actualiza la versión de hoy si ya existe y, si no,
+      // se crea una nueva. Las versiones anteriores quedan como historial.
+      for (const { productId, unitPrice } of changes) {
+        const todayRow = findTodayRow(pricesState.data, selectedId, productId, today);
+        if (todayRow)
+          await updateRecord('product_prices', todayRow.id, {
+            unit_price: unitPrice,
+            is_active: true,
+          });
+        else
+          await insertRecord('product_prices', {
+            price_list_id: selectedId,
+            product_id: productId,
+            unit_price: unitPrice,
+            valid_from: today,
+            is_active: true,
+          });
+      }
+      notify(`${changes.length} precios actualizados.`);
       await pricesState.reload();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'No fue posible guardar los precios.');
@@ -251,11 +271,18 @@ export function PriceListEditor() {
       required: true,
       options: productOptions,
     },
-    { key: 'price', label: 'Precio especial', type: 'number', required: true, min: 0, step: 50 },
+    {
+      key: 'unit_price',
+      label: 'Precio especial',
+      type: 'number',
+      required: true,
+      min: 0,
+      step: 50,
+    },
     { key: 'valid_from', label: 'Vigente desde', type: 'date', required: true },
     { key: 'valid_until', label: 'Vigente hasta', type: 'date' },
     { key: 'notes', label: 'Observación', type: 'textarea', fullWidth: true },
-    { key: 'active', label: 'Activo', type: 'checkbox', defaultValue: true },
+    { key: 'is_active', label: 'Activo', type: 'checkbox', defaultValue: true },
   ];
   const specialColumns: TableColumn<CustomerProductPrice>[] = [
     {
@@ -275,7 +302,9 @@ export function PriceListEditor() {
     {
       key: 'price',
       header: 'Precio',
-      render: (price) => <span className="font-black text-wine">{formatMoney(price.price)}</span>,
+      render: (price) => (
+        <span className="font-black text-wine">{formatMoney(price.unit_price)}</span>
+      ),
     },
     {
       key: 'validity',
@@ -286,7 +315,7 @@ export function PriceListEditor() {
     {
       key: 'status',
       header: 'Estado',
-      render: (price) => <StatusBadge status={price.active === false ? 'inactive' : 'active'} />,
+      render: (price) => <StatusBadge status={price.is_active === false ? 'inactive' : 'active'} />,
     },
   ];
   const tierFields: ResourceField[] = [
@@ -299,14 +328,14 @@ export function PriceListEditor() {
       options: productOptions,
     },
     {
-      key: 'min_quantity',
+      key: 'minimum_quantity',
       label: 'Cantidad mínima',
       type: 'number',
       required: true,
       min: 1,
       step: 1,
     },
-    { key: 'max_quantity', label: 'Cantidad máxima', type: 'number', min: 1, step: 1 },
+    { key: 'maximum_quantity', label: 'Cantidad máxima', type: 'number', min: 1, step: 1 },
     {
       key: 'unit_price',
       label: 'Precio unitario',
@@ -318,7 +347,7 @@ export function PriceListEditor() {
     { key: 'valid_from', label: 'Vigente desde', type: 'date' },
     { key: 'valid_until', label: 'Vigente hasta', type: 'date' },
     {
-      key: 'active',
+      key: 'is_active',
       label: 'Activo',
       type: 'checkbox',
       defaultValue: false,
@@ -341,7 +370,7 @@ export function PriceListEditor() {
     {
       key: 'range',
       header: 'Cantidad',
-      render: (tier) => `${tier.min_quantity} – ${tier.max_quantity || 'en adelante'}`,
+      render: (tier) => `${tier.minimum_quantity} – ${tier.maximum_quantity || 'en adelante'}`,
     },
     {
       key: 'price',
@@ -351,7 +380,7 @@ export function PriceListEditor() {
     {
       key: 'status',
       header: 'Estado',
-      render: (tier) => <StatusBadge status={tier.active ? 'active' : 'inactive'} />,
+      render: (tier) => <StatusBadge status={tier.is_active ? 'active' : 'inactive'} />,
     },
   ];
   const tabs: Array<{ id: PricingTab; label: string }> = [
@@ -564,7 +593,7 @@ export function PriceListEditor() {
           emptyTitle="Sin precios especiales"
           emptyDescription="Crea excepciones únicamente para acuerdos comerciales específicos."
           searchPlaceholder="Buscar cliente, producto o valor…"
-          statusField="active"
+          statusField="is_active"
           realtime
         />
       )}
@@ -579,7 +608,7 @@ export function PriceListEditor() {
           emptyTitle="Sin reglas por volumen"
           emptyDescription="Configura rangos de cantidad cuando quieras habilitar esta modalidad."
           searchPlaceholder="Buscar lista, producto o cantidad…"
-          statusField="active"
+          statusField="is_active"
         />
       )}
       {tab === 'history' && (

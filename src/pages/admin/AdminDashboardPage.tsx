@@ -217,14 +217,14 @@ export function AdminDashboardPage() {
       {
         label: 'Utilidad bruta',
         value: formatMoney(metrics.gross_profit),
-        helper: `${metrics.gross_margin.toFixed(1)}% de margen`,
+        helper: `${metrics.gross_margin.toFixed(1)}% de margen · costo semana anterior`,
         icon: TrendingUp,
         accent: 'green',
       },
       {
         label: 'Utilidad neta',
         value: formatMoney(metrics.net_profit),
-        helper: 'bruta menos gastos',
+        helper: 'costo promedio semana anterior, menos gastos',
         icon: Percent,
         accent: 'green',
       },

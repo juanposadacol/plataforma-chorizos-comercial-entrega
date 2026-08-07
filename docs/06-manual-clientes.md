@@ -6,19 +6,19 @@ La tienda permite comprar como visitante o iniciar sesión con un código SMS. E
 
 1. Abra la página principal.
 2. Busque un producto por nombre o use el filtro de categoría.
-3. Revise fotografía, presentación, precio mostrado y disponibilidad.
-4. Use `+` y `−` para elegir cantidades. El resumen se actualiza automáticamente.
-5. Complete:
-   - nombre completo;
+3. Revise fotografía, presentación, precio mostrado y disponibilidad (**Disponible** o **Agotado**; la tienda no muestra las cantidades en inventario).
+4. Elija la presentación del paquete: **3, 4, 6 o 10 unidades**. Las cuatro versiones tienen el mismo precio y la selección viaja con el pedido para que el negocio sepa cómo empacarlo.
+5. Use `+` y `−` para elegir cantidades. El resumen se actualiza automáticamente.
+6. Complete, empezando por el celular. Si ya compró antes en ese mismo dispositivo —o si inició sesión con su celular— el nombre y la dirección se cargan solos y solo tiene que revisarlos:
    - celular colombiano;
+   - nombre completo;
    - dirección o punto de encuentro;
    - barrio o sector;
    - municipio;
-   - forma de entrega;
-   - forma de pago;
+   - forma de entrega (solo domicilio);
+   - forma de pago (**Efectivo** o **Transferencia**);
    - fecha solicitada;
    - observaciones opcionales.
-6. Lea y acepte el tratamiento de datos.
 7. Pulse **Confirmar pedido seguro** una sola vez y espere la respuesta.
 
 Si el celular no existe, la plataforma crea el cliente con la lista pública. El cliente nunca debe elegir una categoría o lista de precios.
@@ -63,14 +63,11 @@ Una compra válida muestra:
 
 - consecutivo del pedido;
 - total autorizado;
-- estado inicial del pedido y del pago;
-- estado de la notificación;
-- enlace seguro de seguimiento;
 - botón manual de WhatsApp, cuando corresponde.
 
 Ver esta pantalla significa que el pedido ya fue guardado. WhatsApp es una notificación separada: si no abre, tarda o falla, el pedido no se pierde.
 
-Copie el enlace de seguimiento y consérvelo. Si recarga directamente la página de confirmación, su contenido puede no estar disponible; use el enlace o el código guardado.
+La pantalla de confirmación ya no muestra estado, pago, notificación, enlace de seguimiento ni botón para volver a la tienda: anote el consecutivo del pedido, que es el dato que el negocio necesita para atenderlo.
 
 ## 5. WhatsApp de respaldo
 
@@ -88,7 +85,7 @@ El botón manual no confirma el pago y no crea un segundo pedido.
 
 Abra **Seguir pedido** o visite `/seguir`.
 
-1. Pegue el código de seguimiento recibido en la confirmación.
+1. Pegue el código de seguimiento. Los clientes con sesión iniciada lo encuentran en **Mis pedidos**; quien compra como visitante debe solicitarlo al negocio, porque la pantalla de confirmación ya no lo publica.
 2. Pulse **Consultar**.
 3. Revise número, total, productos, estado e historial.
 

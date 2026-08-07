@@ -16,9 +16,6 @@ export const checkoutSchema = z.object({
   paymentMethodId: z.string().uuid('Selecciona una forma de pago.'),
   requestedDate: z.string().min(1, 'Selecciona una fecha.'),
   notes: z.string().trim().max(500, 'Máximo 500 caracteres.'),
-  privacyAccepted: z
-    .boolean()
-    .refine((value) => value, 'Debes aceptar el tratamiento de datos para crear el pedido.'),
 });
 
 export type CheckoutFormValues = z.infer<typeof checkoutSchema>;

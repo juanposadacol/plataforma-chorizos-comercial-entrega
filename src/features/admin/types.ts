@@ -158,19 +158,22 @@ export interface PriceList extends AdminRecord {
 export interface ProductPrice extends AdminRecord {
   price_list_id: string;
   product_id: string;
-  price: number;
+  variant_id?: string | null;
+  unit_price: number;
   valid_from?: string | null;
   valid_until?: string | null;
-  active?: boolean;
+  is_active?: boolean;
+  deleted_at?: string | null;
+  created_at?: string;
 }
 
 export interface CustomerProductPrice extends AdminRecord {
   customer_id: string;
   product_id: string;
-  price: number;
+  unit_price: number;
   valid_from?: string | null;
   valid_until?: string | null;
-  active?: boolean;
+  is_active?: boolean;
   notes?: string | null;
 }
 
@@ -300,7 +303,17 @@ export interface DashboardMetricsSummary {
   sales_cost: number;
   gross_profit: number;
   operating_expenses: number;
+  /** Utilidad neta valorada con el costo promedio de la semana anterior a cada entrega. */
   net_profit: number;
+  /** Costo de ventas con ese mismo criterio semanal. */
+  sales_cost_weekly?: number;
+  gross_profit_weekly?: number;
+  /** Lectura anterior: costo congelado en el pedido. Sirve para comparar. */
+  sales_cost_recorded?: number;
+  gross_profit_recorded?: number;
+  net_profit_recorded?: number;
+  /** % de líneas vendidas que sí tenían compras previas para promediar. */
+  weekly_cost_coverage?: number;
   gross_margin: number;
   delivered_orders: number;
   average_ticket: number;

@@ -1,4 +1,4 @@
-import { Bike, Store } from 'lucide-react';
+import { Bike } from 'lucide-react';
 import type { FieldError, UseFormRegister } from 'react-hook-form';
 import type { CheckoutFormValues } from '../../features/orders/checkoutSchema';
 import { formatMoney } from '../../lib/format';
@@ -17,10 +17,10 @@ export function DeliverySelector({
     <fieldset className="option-fieldset" aria-describedby={error ? 'delivery-error' : undefined}>
       <legend>Forma de entrega</legend>
       <div className="option-grid">
-        {options.map((option, index) => (
+        {options.map((option) => (
           <label className="choice-card" key={option.id}>
             <input type="radio" value={option.id} {...register('deliveryMethodId')} />
-            {index === 0 ? <Bike aria-hidden="true" /> : <Store aria-hidden="true" />}
+            <Bike aria-hidden="true" />
             <span>
               <strong>{option.name}</strong>
               <small>

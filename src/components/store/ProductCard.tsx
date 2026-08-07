@@ -1,26 +1,33 @@
-import { BadgeCheck, Package, Warehouse } from 'lucide-react';
+import { BadgeCheck, CircleCheck, Package } from 'lucide-react';
+import { basePresentation, type PackSize } from '../../domain/packs';
 import { formatMoney } from '../../lib/format';
 import type { Product } from '../../types/domain';
+import { PackSizeSelector } from './PackSizeSelector';
 import { QuantitySelector } from './QuantitySelector';
 
 export function ProductCard({
   product,
   quantity,
+  packSize,
   onIncrement,
   onDecrement,
+  onPackSize,
 }: {
   product: Product;
   quantity: number;
+  packSize: PackSize;
   onIncrement: () => void;
   onDecrement: () => void;
+  onPackSize: (packSize: PackSize) => void;
 }) {
   const available = product.allow_backorder || product.stock_available > 0;
+  const presentation = basePresentation(product.presentation);
   return (
     <article className="product-card">
       <div className="product-image-wrap">
         <img
           src={product.image_url}
-          alt={`Chorizo ${product.name}, ${product.presentation}`}
+          alt={`Chorizo ${product.name}, ${presentation}`}
           loading="lazy"
           width="1254"
           height="1254"
@@ -42,21 +49,28 @@ export function ProductCard({
         <p className="product-description">{product.short_description}</p>
         <div className="product-meta">
           <span>
-            <Package aria-hidden="true" /> {product.presentation}
+            <Package aria-hidden="true" /> {presentation}
           </span>
           <span className={available ? 'stock stock--ok' : 'stock stock--out'}>
-            <Warehouse aria-hidden="true" />{' '}
-            {available ? `${product.stock_available} disponibles` : 'Agotado'}
+            <CircleCheck aria-hidden="true" /> {available ? 'Disponible' : 'Agotado'}
           </span>
         </div>
         {available ? (
-          <QuantitySelector
-            name={product.name}
-            value={quantity}
-            maximum={product.allow_backorder ? 999 : product.stock_available}
-            onIncrement={onIncrement}
-            onDecrement={onDecrement}
-          />
+          <>
+            <PackSizeSelector
+              productId={product.id}
+              productName={product.name}
+              value={packSize}
+              onChange={onPackSize}
+            />
+            <QuantitySelector
+              name={product.name}
+              value={quantity}
+              maximum={product.allow_backorder ? 999 : product.stock_available}
+              onIncrement={onIncrement}
+              onDecrement={onDecrement}
+            />
+          </>
         ) : (
           <p className="out-of-stock">Este producto no está disponible por ahora.</p>
         )}
