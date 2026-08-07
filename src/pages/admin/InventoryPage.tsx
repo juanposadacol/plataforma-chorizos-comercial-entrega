@@ -1,6 +1,7 @@
 import { useMemo, useState, type FormEvent } from 'react';
-import { ArrowDown, ArrowUp, Boxes, Plus, Save, TriangleAlert } from 'lucide-react';
+import { ArrowDown, ArrowUp, Boxes, Edit3, Plus, Save, Trash2, TriangleAlert } from 'lucide-react';
 import type { AdminProduct, InventoryMovement } from '../../features/admin/types';
+import { isEditableMovement } from '../../features/admin/types';
 import { invokeAdminRpc } from '../../features/admin/adminService';
 import { useAdminData } from '../../features/admin/useAdminData';
 import { formatAdminDate, formatMoney, matchesSearch, toNumber } from '../../features/admin/utils';
@@ -50,13 +51,19 @@ export function InventoryPage() {
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [adjustOpen, setAdjustOpen] = useState(false);
-  const [form, setForm] = useState({
+  /** Movimiento que se está corrigiendo; null cuando se está registrando uno nuevo. */
+  const [editing, setEditing] = useState<InventoryMovement | null>(null);
+  /** Movimiento pendiente de eliminar (con su confirmación). */
+  const [deleting, setDeleting] = useState<InventoryMovement | null>(null);
+  const [deleteReason, setDeleteReason] = useState('');
+  const emptyForm = {
     product_id: '',
     movement_type: 'positive_adjustment',
     quantity: '1',
     unit_cost: '',
     notes: '',
-  });
+  };
+  const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -96,33 +103,87 @@ export function InventoryPage() {
       toNumber(product.minimum_stock),
   ).length;
 
+  const openCreate = () => {
+    setEditing(null);
+    setForm(emptyForm);
+    setError(null);
+    setAdjustOpen(true);
+  };
+
+  /** Abre el mismo formulario con los datos del ajuste que se va a corregir. */
+  const openEdit = (movement: InventoryMovement) => {
+    setEditing(movement);
+    setForm({
+      product_id: movement.product_id,
+      movement_type: movement.movement_type,
+      quantity: String(toNumber(movement.quantity)),
+      unit_cost: movement.unit_cost == null ? '' : String(toNumber(movement.unit_cost)),
+      notes: movement.notes ?? '',
+    });
+    setError(null);
+    setAdjustOpen(true);
+  };
+
   const submitAdjustment = async (event: FormEvent) => {
     event.preventDefault();
     setSaving(true);
     setError(null);
     try {
-      await invokeAdminRpc('create_inventory_adjustment', {
-        p_product_id: form.product_id,
-        p_movement_type: form.movement_type,
-        p_quantity: Number(form.quantity),
-        p_unit_cost: form.unit_cost ? Number(form.unit_cost) : null,
-        p_notes: form.notes,
-      });
+      if (editing) {
+        // Corrección: el servidor recalcula el stock y recoloca los saldos
+        // posteriores del kardex en la misma transacción.
+        await invokeAdminRpc('update_inventory_adjustment', {
+          p_movement_id: editing.id,
+          p_movement_type: form.movement_type,
+          p_quantity: Number(form.quantity),
+          p_unit_cost: form.unit_cost ? Number(form.unit_cost) : null,
+          p_notes: form.notes,
+        });
+      } else {
+        await invokeAdminRpc('create_inventory_adjustment', {
+          p_product_id: form.product_id,
+          p_movement_type: form.movement_type,
+          p_quantity: Number(form.quantity),
+          p_unit_cost: form.unit_cost ? Number(form.unit_cost) : null,
+          p_notes: form.notes,
+        });
+      }
       setAdjustOpen(false);
-      setForm({
-        product_id: '',
-        movement_type: 'positive_adjustment',
-        quantity: '1',
-        unit_cost: '',
-        notes: '',
-      });
-      setSuccess('Movimiento registrado; el saldo se recalculó de forma transaccional.');
+      setSuccess(
+        editing
+          ? 'Movimiento corregido; el saldo del producto y el kardex se recalcularon.'
+          : 'Movimiento registrado; el saldo se recalculó de forma transaccional.',
+      );
+      setEditing(null);
+      setForm(emptyForm);
       window.setTimeout(() => setSuccess(null), 4000);
       await Promise.all([productsState.reload(), movementsState.reload()]);
     } catch (caught) {
       setError(
         caught instanceof Error ? caught.message : 'No fue posible registrar el movimiento.',
       );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const confirmDelete = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!deleting || saving) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await invokeAdminRpc('delete_inventory_adjustment', {
+        p_movement_id: deleting.id,
+        p_reason: deleteReason,
+      });
+      setDeleting(null);
+      setDeleteReason('');
+      setSuccess('Movimiento eliminado; su efecto en el inventario fue revertido.');
+      window.setTimeout(() => setSuccess(null), 4000);
+      await Promise.all([productsState.reload(), movementsState.reload()]);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'No fue posible eliminar el movimiento.');
     } finally {
       setSaving(false);
     }
@@ -186,7 +247,13 @@ export function InventoryPage() {
     {
       key: 'balance',
       header: 'Saldo',
-      render: (movement) => <span className="font-black">{toNumber(movement.new_balance)}</span>,
+      // `stock_on_hand_after` es la columna real del kardex; `new_balance` solo
+      // sobrevive como alias de consultas antiguas.
+      render: (movement) => (
+        <span className="font-black">
+          {toNumber(movement.stock_on_hand_after ?? movement.new_balance)}
+        </span>
+      ),
     },
     {
       key: 'cost',
@@ -200,6 +267,42 @@ export function InventoryPage() {
         <span className="line-clamp-2 max-w-xs text-artisan-muted">{movement.notes || '—'}</span>
       ),
     },
+    {
+      key: 'actions',
+      header: 'Acciones',
+      className: 'w-28',
+      // Solo los ajustes manuales se corrigen o eliminan aquí. Los movimientos
+      // de un pedido o de una compra se arreglan en su documento de origen.
+      render: (movement) =>
+        isEditableMovement(movement) ? (
+          <div className="flex justify-end gap-1">
+            <button
+              type="button"
+              className="grid h-9 w-9 place-items-center rounded-lg text-artisan-muted hover:bg-artisan-paper hover:text-wine"
+              onClick={() => openEdit(movement)}
+              aria-label="Editar movimiento"
+              title="Editar movimiento"
+            >
+              <Edit3 className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              className="grid h-9 w-9 place-items-center rounded-lg text-artisan-muted hover:bg-red-50 hover:text-red-700"
+              onClick={() => {
+                setError(null);
+                setDeleteReason('');
+                setDeleting(movement);
+              }}
+              aria-label="Eliminar movimiento"
+              title="Eliminar movimiento"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </div>
+        ) : (
+          <span className="block text-right text-xs text-artisan-muted">Automático</span>
+        ),
+    },
   ];
 
   return (
@@ -207,16 +310,11 @@ export function InventoryPage() {
       <PageHeader
         eyebrow="Bodega"
         title="Inventario y kardex"
-        description="Consulta existencias, reservas y movimientos. Todo ajuste crea un registro auditable; el stock nunca se edita directamente."
+        description="Consulta existencias, reservas y movimientos. Todo ajuste crea un registro auditable; los ajustes manuales se pueden corregir o eliminar y el stock se recalcula solo."
         actions={
           <>
             <ExportCsvButton filename="kardex" rows={filtered} />
-            <Button
-              onClick={() => {
-                setError(null);
-                setAdjustOpen(true);
-              }}
-            >
+            <Button onClick={openCreate}>
               <Plus className="h-4 w-4" />
               Registrar ajuste
             </Button>
@@ -318,8 +416,12 @@ export function InventoryPage() {
       </section>
       <Modal
         open={adjustOpen}
-        title="Registrar ajuste de inventario"
-        description="La operación se procesa en el servidor y conserva los saldos anterior y posterior."
+        title={editing ? 'Corregir movimiento de inventario' : 'Registrar ajuste de inventario'}
+        description={
+          editing
+            ? 'Se recalcula el stock del producto y los saldos posteriores del kardex en una sola transacción.'
+            : 'La operación se procesa en el servidor y conserva los saldos anterior y posterior.'
+        }
         onClose={() => !saving && setAdjustOpen(false)}
       >
         <form onSubmit={submitAdjustment} className="space-y-4">
@@ -329,6 +431,10 @@ export function InventoryPage() {
               required
               className={inputClass}
               value={form.product_id}
+              // El producto de un movimiento ya registrado no se cambia: sería
+              // mover stock entre dos referencias distintas. Se elimina y se
+              // vuelve a registrar.
+              disabled={Boolean(editing)}
               onChange={(event) =>
                 setForm((current) => ({ ...current, product_id: event.target.value }))
               }
@@ -405,10 +511,66 @@ export function InventoryPage() {
             </Button>
             <Button type="submit" disabled={saving}>
               <Save className="h-4 w-4" />
-              {saving ? 'Registrando…' : 'Registrar movimiento'}
+              {saving
+                ? editing
+                  ? 'Guardando…'
+                  : 'Registrando…'
+                : editing
+                  ? 'Guardar corrección'
+                  : 'Registrar movimiento'}
             </Button>
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        open={Boolean(deleting)}
+        title="Eliminar movimiento de inventario"
+        description="El efecto de este ajuste sobre el stock se revierte y el kardex vuelve a cuadrar."
+        onClose={() => !saving && setDeleting(null)}
+      >
+        {deleting && (
+          <form onSubmit={confirmDelete} className="space-y-4">
+            <div
+              className="flex gap-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800"
+              role="alert"
+            >
+              <TriangleAlert className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+              <p>
+                Se eliminará el movimiento de{' '}
+                <strong>{productById.get(deleting.product_id)?.name ?? 'este producto'}</strong> por{' '}
+                <strong>{toNumber(deleting.quantity)}</strong> unidades (
+                {movementLabels[deleting.movement_type] ?? deleting.movement_type}). La acción queda
+                registrada en la auditoría.
+              </p>
+            </div>
+            <label>
+              <span className={labelClass}>Motivo *</span>
+              <textarea
+                required
+                className={`${inputClass} min-h-20`}
+                value={deleteReason}
+                onChange={(event) => setDeleteReason(event.target.value)}
+                placeholder="Explica por qué se elimina este movimiento…"
+              />
+            </label>
+            {error && <div className="rounded-xl bg-red-50 p-3 text-sm text-red-800">{error}</div>}
+            <div className="flex justify-end gap-2 border-t border-artisan-line pt-4">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setDeleting(null)}
+                disabled={saving}
+              >
+                Cancelar
+              </Button>
+              <Button type="submit" variant="danger" disabled={saving}>
+                <Trash2 className="h-4 w-4" />
+                {saving ? 'Eliminando…' : 'Eliminar movimiento'}
+              </Button>
+            </div>
+          </form>
+        )}
       </Modal>
     </>
   );

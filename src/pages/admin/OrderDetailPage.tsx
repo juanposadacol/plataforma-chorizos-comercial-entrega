@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   ArrowLeft,
   CheckCircle2,
+  FileText,
   MapPin,
   Phone,
   Printer,
@@ -54,6 +55,8 @@ import {
 } from '../../features/admin/components/AdminUi';
 import { CancelReturnModal } from '../../features/admin/orders/CancelReturnModal';
 import { DeliverAndPayModal } from '../../features/admin/orders/DeliverAndPayModal';
+import { downloadDeliveryNote } from '../../features/admin/orders/deliveryNote';
+import { getPublicSettings } from '../../features/catalog/catalogApi';
 
 interface StatusHistory extends Record<string, unknown> {
   id: string;
@@ -167,6 +170,22 @@ export function OrderDetailPage() {
     }
   };
 
+  /** Descarga el comprobante de entrega (PDF) del pedido abierto, listo para firmar. */
+  const printDeliveryNote = async () => {
+    if (!order) return;
+    try {
+      const settings = await getPublicSettings().catch(() => null);
+      downloadDeliveryNote({
+        order,
+        items,
+        businessName: settings?.businessName,
+        businessContact: settings?.whatsappNumber ? `WhatsApp ${settings.whatsappNumber}` : null,
+      });
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'No fue posible generar el comprobante.');
+    }
+  };
+
   const saveNotes = async () => {
     if (!order) return;
     setSaving(true);
@@ -263,6 +282,10 @@ export function OrderDetailPage() {
         description={`Creado ${formatAdminDate(order.created_at, true)} · Entrega ${formatAdminDate(order.requested_delivery_date ?? order.requested_date)}`}
         actions={
           <>
+            <Button variant="secondary" onClick={() => void printDeliveryNote()}>
+              <FileText className="h-4 w-4" />
+              Comprobante de entrega
+            </Button>
             <Button variant="secondary" onClick={() => window.print()}>
               <Printer className="h-4 w-4" />
               Imprimir / PDF
@@ -272,7 +295,9 @@ export function OrderDetailPage() {
                 onClick={() => setDeliverPayOpen(true)}
                 disabled={!canTriggerDeliverAndPay}
                 title={
-                  canTriggerDeliverAndPay ? undefined : 'Tu rol solo puede pagar pedidos ya entregados'
+                  canTriggerDeliverAndPay
+                    ? undefined
+                    : 'Tu rol solo puede pagar pedidos ya entregados'
                 }
               >
                 <Truck className="h-4 w-4" />

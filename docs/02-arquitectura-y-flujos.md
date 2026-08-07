@@ -3,7 +3,7 @@
 ## Capas
 
 - **Web:** React, Vite, TypeScript, React Router, Tailwind, React Hook Form y Zod.
-- **Estado servidor:** TanStack Query. El carrito persiste únicamente `{productId, quantity}` en el dispositivo.
+- **Estado servidor:** TanStack Query. El carrito persiste únicamente `{productId, packSize, quantity}` por línea en el dispositivo: el mismo producto en dos presentaciones son dos líneas.
 - **Backend:** Supabase Auth, PostgreSQL, RLS, Storage, Realtime y Edge Functions.
 - **Operación:** funciones PostgreSQL para precios, pedidos, inventario, compras y pagos.
 - **Notificaciones:** outbox persistente y Edge Function para WhatsApp Business Cloud.

@@ -7,6 +7,7 @@ import {
   canDeleteOrderPermanently,
   describeOrderDeletionError,
   explainHiddenTrash,
+  orderDeletionWarnings,
   orderLooksPurgeable,
 } from '../utils';
 import type { AdminOrder } from '../types';
@@ -50,26 +51,51 @@ describe('11. visibilidad del botón según el rol', () => {
     expect(canDeleteOrderPermanently([])).toBe(false);
   });
 
-  it('la papelera solo se ofrece para pedidos elegibles', () => {
+  // Regla vigente: la papelera se ofrece en cualquier pedido vivo, incluidos los
+  // pagados y los entregados. La RPC revierte pagos, inventario, caja y cartera
+  // dentro de la misma transacción (202608070006).
+  it('la papelera se ofrece en cualquier estado, también pagado o entregado', () => {
     expect(orderLooksPurgeable({ status: 'new', payment_status: 'pending' })).toBe(true);
     expect(orderLooksPurgeable({ status: 'pending_confirmation', payment_status: 'pending' })).toBe(
       true,
     );
-    expect(orderLooksPurgeable({ status: 'delivered', payment_status: 'pending' })).toBe(false);
-    expect(orderLooksPurgeable({ status: 'confirmed', payment_status: 'pending' })).toBe(false);
-    expect(orderLooksPurgeable({ status: 'cancelled', payment_status: 'pending' })).toBe(false);
-    expect(orderLooksPurgeable({ status: 'new', payment_status: 'paid' })).toBe(false);
-    expect(orderLooksPurgeable({ status: 'new', payment_status: 'partial' })).toBe(false);
+    expect(orderLooksPurgeable({ status: 'delivered', payment_status: 'paid' })).toBe(true);
+    expect(orderLooksPurgeable({ status: 'confirmed', payment_status: 'partial' })).toBe(true);
+    expect(orderLooksPurgeable({ status: 'cancelled', payment_status: 'pending' })).toBe(true);
     expect(
       orderLooksPurgeable({ status: 'new', payment_status: 'pending', amount_paid: 1000 }),
-    ).toBe(false);
+    ).toBe(true);
+    expect(
+      orderLooksPurgeable({
+        status: 'delivered',
+        payment_status: 'paid',
+        delivered_at: '2026-07-01T00:00:00Z',
+      }),
+    ).toBe(true);
+    // Un pedido ya archivado (soft delete) no vuelve a ofrecerse.
     expect(
       orderLooksPurgeable({
         status: 'new',
         payment_status: 'pending',
-        delivered_at: '2026-07-01T00:00:00Z',
+        deleted_at: '2026-07-01T00:00:00Z',
       }),
     ).toBe(false);
+  });
+
+  it('advierte lo que se revertirá antes de confirmar', () => {
+    expect(
+      orderDeletionWarnings({
+        status: 'delivered',
+        payment_status: 'paid',
+        amount_paid: 34600,
+        delivered_at: '2026-07-01T00:00:00Z',
+      }),
+    ).toEqual([
+      expect.stringContaining('pagos registrados'),
+      expect.stringContaining('volverán al inventario'),
+    ]);
+    // Un pedido nuevo sin pagos no necesita advertencias.
+    expect(orderDeletionWarnings({ status: 'new', payment_status: 'pending' })).toEqual([]);
   });
 });
 
@@ -105,22 +131,29 @@ describe('por qué se oculta la papelera (caso #PED-00000012)', () => {
     expect(explainHiddenTrash([], PED_00000012)).toBe('roles-not-loaded');
   });
 
-  it('7. un pedido Entregado o Pagado no la muestra ni al superadmin', () => {
+  it('7. un pedido Entregado o Pagado también la muestra al superadmin', () => {
     expect(explainHiddenTrash(['superadmin'], { ...PED_00000012, status: 'delivered' })).toBe(
-      'status-not-eligible',
+      'visible',
     );
     expect(explainHiddenTrash(['superadmin'], { ...PED_00000012, payment_status: 'paid' })).toBe(
-      'payment-not-pending',
+      'visible',
     );
     expect(explainHiddenTrash(['superadmin'], { ...PED_00000012, amount_paid: 5000 })).toBe(
-      'order-has-amount-paid',
+      'visible',
     );
     expect(
       explainHiddenTrash(['superadmin'], {
         ...PED_00000012,
         delivered_at: '2026-07-01T00:00:00Z',
       }),
-    ).toBe('order-fulfilled');
+    ).toBe('visible');
+    // Lo único que la retira es que el pedido ya esté archivado.
+    expect(
+      explainHiddenTrash(['superadmin'], {
+        ...PED_00000012,
+        deleted_at: '2026-07-01T00:00:00Z',
+      }),
+    ).toBe('order-already-deleted');
   });
 
   it('el motivo nunca contiene datos del pedido ni del usuario', () => {

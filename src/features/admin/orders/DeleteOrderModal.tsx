@@ -6,6 +6,7 @@ import {
   describeOrderDeletionError,
   firstText,
   formatMoney,
+  orderDeletionWarnings,
   orderStatusLabels,
   paymentStatusLabels,
 } from '../utils';
@@ -22,6 +23,8 @@ interface Props {
 
 export function DeleteOrderModal({ open, order, onClose, onDeleted }: Props) {
   const orderNumber = firstText(order, 'order_number', 'consecutive') || order.id.slice(0, 8);
+  // Consecuencias propias de ESTE pedido (pagos, entrega, devolución).
+  const warnings = orderDeletionWarnings(order);
   const [confirmation, setConfirmation] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -73,9 +76,24 @@ export function DeleteOrderModal({ open, order, onClose, onDeleted }: Props) {
           <TriangleAlert className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
           <p>
             Esta acción no se puede deshacer. El pedido será eliminado de la operación y el
-            inventario reservado será liberado.
+            inventario reservado será liberado. Lo que el pedido haya movido en inventario, caja y
+            cartera se revierte en la misma operación.
           </p>
         </div>
+
+        {warnings.length > 0 && (
+          <ul
+            className="space-y-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"
+            aria-label="Consecuencias de eliminar este pedido"
+          >
+            {warnings.map((warning) => (
+              <li key={warning} className="flex gap-2">
+                <span aria-hidden="true">•</span>
+                <span>{warning}</span>
+              </li>
+            ))}
+          </ul>
+        )}
 
         <div className="grid grid-cols-2 gap-3 rounded-xl bg-artisan-paper p-4 text-sm">
           <div>

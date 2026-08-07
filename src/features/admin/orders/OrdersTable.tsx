@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react';
-import { ArrowRight, RefreshCw, Trash2, Truck } from 'lucide-react';
+import { ArrowRight, FileText, LoaderCircle, RefreshCw, Trash2, Truck } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { invokeAdminRpc } from '../adminService';
-import type { AdminOrder } from '../types';
+import { fetchRecords, invokeAdminRpc } from '../adminService';
+import type { AdminOrder, AdminOrderItem } from '../types';
 import { orderTotal } from '../types';
+import { getPublicSettings } from '../../catalog/catalogApi';
+import { downloadDeliveryNote } from './deliveryNote';
 import {
   canDeleteOrderPermanently,
   canDeliverViaCombinedAction,
@@ -74,6 +76,8 @@ export function OrdersTable() {
   // evento de realtime.
   const [purgedIds, setPurgedIds] = useState<string[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
+  // Pedido cuyo comprobante de entrega se está armando (se descarga en PDF).
+  const [printing, setPrinting] = useState<string | null>(null);
 
   const filtered = useMemo(
     () =>
@@ -108,9 +112,7 @@ export function OrdersTable() {
       await reload();
     } catch (caught) {
       setMutationError(
-        caught instanceof Error
-          ? caught.message
-          : 'No fue posible cambiar el estado del pedido.',
+        caught instanceof Error ? caught.message : 'No fue posible cambiar el estado del pedido.',
       );
     } finally {
       setUpdating(null);
@@ -131,6 +133,38 @@ export function OrdersTable() {
       await reload();
     } finally {
       setUpdating(null);
+    }
+  };
+
+  /**
+   * Comprobante de entrega en PDF: se descarga con el detalle del pedido y el
+   * espacio para las firmas. Las líneas se leen en el momento porque la tabla
+   * solo trae la cabecera del pedido.
+   */
+  const printDeliveryNote = async (order: AdminOrder) => {
+    setPrinting(order.id);
+    setMutationError(null);
+    try {
+      const [items, settings] = await Promise.all([
+        fetchRecords<AdminOrderItem>('order_items', {
+          eq: { order_id: order.id },
+          orderBy: 'created_at',
+          ascending: true,
+        }),
+        getPublicSettings().catch(() => null),
+      ]);
+      downloadDeliveryNote({
+        order,
+        items,
+        businessName: settings?.businessName,
+        businessContact: settings?.whatsappNumber ? `WhatsApp ${settings.whatsappNumber}` : null,
+      });
+    } catch (caught) {
+      setMutationError(
+        caught instanceof Error ? caught.message : 'No fue posible generar el comprobante.',
+      );
+    } finally {
+      setPrinting(null);
     }
   };
 
@@ -193,9 +227,7 @@ export function OrdersTable() {
     {
       key: 'total',
       header: 'Total',
-      render: (order) => (
-        <span className="font-black">{formatMoney(orderTotal(order))}</span>
-      ),
+      render: (order) => <span className="font-black">{formatMoney(orderTotal(order))}</span>,
     },
     {
       key: 'payment',
@@ -216,9 +248,7 @@ export function OrdersTable() {
           className="rounded-lg border border-artisan-line bg-white px-2 py-1.5 text-xs font-bold text-artisan-ink outline-none focus:border-wine"
           value={order.status}
           disabled={
-            updating === order.id ||
-            order.status === 'cancelled' ||
-            order.status === 'returned'
+            updating === order.id || order.status === 'cancelled' || order.status === 'returned'
           }
           onClick={(event) => event.stopPropagation()}
           onChange={(event) => void transition(order, event.target.value)}
@@ -234,24 +264,41 @@ export function OrdersTable() {
     {
       key: 'open',
       header: '',
-      className: 'w-36',
+      className: 'w-48',
       render: (order) => (
         <div className="flex items-center gap-1">
           {canUseDeliverAndPay &&
             !['cancelled', 'returned', 'delivered'].includes(order.status ?? '') && (
-            <button
-              type="button"
-              aria-label="Entregar y pagar"
-              title="Entregar y pagar"
-              className="grid h-9 w-9 place-items-center rounded-lg text-emerald-700 hover:bg-emerald-50"
-              onClick={(event) => {
-                event.stopPropagation();
-                setDeliverPayModal(order);
-              }}
-            >
-              <Truck className="h-4 w-4" />
-            </button>
-          )}
+              <button
+                type="button"
+                aria-label="Entregar y pagar"
+                title="Entregar y pagar"
+                className="grid h-9 w-9 place-items-center rounded-lg text-emerald-700 hover:bg-emerald-50"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setDeliverPayModal(order);
+                }}
+              >
+                <Truck className="h-4 w-4" />
+              </button>
+            )}
+          <button
+            type="button"
+            aria-label={`Comprobante de entrega en PDF del pedido ${firstText(order, 'order_number')}`}
+            title="Comprobante de entrega (PDF para firmar)"
+            className="grid h-9 w-9 place-items-center rounded-lg text-artisan-muted hover:bg-artisan-paper hover:text-wine"
+            disabled={printing === order.id}
+            onClick={(event) => {
+              event.stopPropagation();
+              void printDeliveryNote(order);
+            }}
+          >
+            {printing === order.id ? (
+              <LoaderCircle className="h-4 w-4 animate-spin" />
+            ) : (
+              <FileText className="h-4 w-4" />
+            )}
+          </button>
           <Link
             to={`/admin/pedidos/${order.id}`}
             aria-label="Abrir pedido"
@@ -302,11 +349,7 @@ export function OrdersTable() {
           role="status"
         >
           <span>{notice}</span>
-          <button
-            type="button"
-            className="font-bold underline"
-            onClick={() => setNotice(null)}
-          >
+          <button type="button" className="font-bold underline" onClick={() => setNotice(null)}>
             Cerrar
           </button>
         </div>

@@ -91,28 +91,54 @@ export const canDeliverViaCombinedAction = (roles: string[]): boolean =>
 export const canDeleteOrderPermanently = (roles: string[]): boolean =>
   hasAnyRole(roles, ['superadmin']);
 
-/** Estados en los que el servidor acepta la eliminación definitiva. */
-export const PURGEABLE_ORDER_STATUSES = ['new', 'pending_confirmation'] as const;
-
-/**
- * Espejo en cliente de las condiciones de `order_is_purgeable`, limitado a lo que
- * la fila de la tabla ya conoce. El servidor revalida todo con el pedido
- * bloqueado, así que esto solo evita ofrecer una acción que sería rechazada.
- */
-export const orderLooksPurgeable = (order: {
+export interface PurgeableOrderFields {
   status?: string;
   payment_status?: string;
   amount_paid?: number;
   delivered_at?: string | null;
+  dispatched_at?: string | null;
   returned_at?: string | null;
-}): boolean =>
-  PURGEABLE_ORDER_STATUSES.includes(
-    (order.status ?? '') as (typeof PURGEABLE_ORDER_STATUSES)[number],
-  ) &&
-  order.payment_status === 'pending' &&
-  !toNumber(order.amount_paid) &&
-  !order.delivered_at &&
-  !order.returned_at;
+  deleted_at?: string | null;
+}
+
+/**
+ * La papelera se ofrece en cualquier pedido vivo, sin importar su estado ni si
+ * está pagado: `delete_order_permanently`
+ * (202608070006_delete_order_permanently_any_state.sql) revierte pagos,
+ * inventario vendido, caja y cartera dentro de la misma transacción. El servidor
+ * sigue siendo la frontera real —revalida con el pedido bloqueado— y solo
+ * rechaza los casos que no puede revertir (por ejemplo un gasto contable
+ * asociado).
+ */
+export const orderLooksPurgeable = (order: PurgeableOrderFields): boolean => !order.deleted_at;
+
+/**
+ * Consecuencias que el pedido concreto tendrá al eliminarse, para advertirlas en
+ * el modal antes de confirmar. Texto para la persona; sin códigos internos.
+ */
+export const orderDeletionWarnings = (order: PurgeableOrderFields): string[] => {
+  const warnings: string[] = [];
+  const paid = toNumber(order.amount_paid);
+  if (paid > 0 || ['paid', 'partial'].includes(order.payment_status ?? '')) {
+    warnings.push(
+      `Tiene ${formatMoney(paid)} en pagos registrados: se eliminarán junto con sus movimientos de caja y su cartera.`,
+    );
+  }
+  if (order.delivered_at) {
+    warnings.push(
+      'Ya fue entregado: las unidades vendidas volverán al inventario y se descontará de las compras del cliente.',
+    );
+  } else if (order.dispatched_at) {
+    warnings.push('Ya fue despachado: el inventario del pedido se devolverá al stock.');
+  }
+  if (order.returned_at) {
+    warnings.push('Tiene una devolución registrada: también se revertirá.');
+  }
+  if (order.status === 'cancelled') {
+    warnings.push('Está cancelado: se borrará su historial junto con el pedido.');
+  }
+  return warnings;
+};
 
 /**
  * Por qué NO se ofrece la papelera en una fila. Función pura y sin datos
@@ -123,35 +149,15 @@ export const orderLooksPurgeable = (order: {
  * `canDeleteOrderPermanently && orderLooksPurgeable`.
  */
 export type HiddenTrashReason =
-  | 'visible'
-  | 'roles-not-loaded'
-  | 'role-not-superadmin'
-  | 'status-not-eligible'
-  | 'payment-not-pending'
-  | 'order-has-amount-paid'
-  | 'order-fulfilled';
+  'visible' | 'roles-not-loaded' | 'role-not-superadmin' | 'order-already-deleted';
 
 export const explainHiddenTrash = (
   roles: string[],
-  order: {
-    status?: string;
-    payment_status?: string;
-    amount_paid?: number;
-    delivered_at?: string | null;
-    returned_at?: string | null;
-  },
+  order: PurgeableOrderFields,
 ): HiddenTrashReason => {
   if (!roles.length) return 'roles-not-loaded';
   if (!canDeleteOrderPermanently(roles)) return 'role-not-superadmin';
-  if (
-    !PURGEABLE_ORDER_STATUSES.includes(
-      (order.status ?? '') as (typeof PURGEABLE_ORDER_STATUSES)[number],
-    )
-  )
-    return 'status-not-eligible';
-  if (order.payment_status !== 'pending') return 'payment-not-pending';
-  if (toNumber(order.amount_paid)) return 'order-has-amount-paid';
-  if (order.delivered_at || order.returned_at) return 'order-fulfilled';
+  if (!orderLooksPurgeable(order)) return 'order-already-deleted';
   return 'visible';
 };
 
@@ -168,6 +174,10 @@ export const describeOrderDeletionError = (raw: string): string => {
     ['STATUS_NOT_ELIGIBLE', 'Solo se pueden eliminar pedidos en estado Nuevo o Por confirmar.'],
     ['ORDER_HAS_PAYMENT', 'El pedido tiene pagos registrados y no puede eliminarse.'],
     ['ORDER_HAS_FULFILLMENT', 'El pedido tiene entrega, despacho o devolución registrada.'],
+    [
+      'ORDER_HAS_EXPENSE',
+      'El pedido tiene un gasto contable asociado. Elimina primero ese gasto en Gastos.',
+    ],
     ['ORDER_HAS_ACCOUNTING', 'El pedido tiene gastos o movimientos de caja asociados.'],
     ['INVENTORY_NOT_REVERSIBLE', 'El inventario del pedido no se puede revertir.'],
     ['ORDER_LOCKED', 'Otra persona está modificando este pedido. Intenta de nuevo.'],

@@ -27,6 +27,15 @@
 - `unique`, `check`, foreign keys e índices en relaciones, estados, celular y fechas.
 - Vigencias evitan rangos incoherentes; el historial del pedido no depende de valores maestros futuros.
 
+## Celulares
+
+Se guardan **sin el indicativo del país**: los 10 dígitos locales (`3013350356`), que son los que el negocio escribe, dicta y busca. Aplica a `customers.phone`, `customers.whatsapp_phone`, `orders.customer_phone` y `customer_addresses.recipient_phone`.
+
+- `public.phone_key(text)` es la forma canónica de comparación: solo dígitos y sin el `57` inicial cuando el número queda en 10 dígitos. Es la que usan `create_order`, `lookup_customer_for_order` y el índice único de clientes, así que un número guardado antes con indicativo y el mismo número sin él siguen siendo el mismo cliente.
+- `public.normalize_phone(text)` (solo dígitos) sigue siendo la forma de **marcación**: es la que arma los enlaces `wa.me` con indicativo y la que validan los `check`.
+- En el navegador, `normalizeColombianPhone` guarda y `toColombianE164` reconstruye el `+57…` que exige el SMS de Supabase Auth.
+- Los números que digita el negocio para marcar (`whatsapp_settings`, `suppliers`) se conservan tal cual se escriben.
+
 ## Snapshots de pedido
 
 `orders` conserva nombre, celular, dirección, forma de entrega/pago y totales. `order_items` conserva SKU, nombre, imagen, lista aplicada, fuente del precio, precio público, precio unitario, descuento, costo histórico y utilidad. Cambiar después un producto o una tarifa no reescribe órdenes anteriores.

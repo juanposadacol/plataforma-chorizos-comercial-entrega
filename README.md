@@ -6,7 +6,7 @@ Aplicación web en español para vender chorizos artesanales y administrar pedid
 
 ## Qué incluye
 
-- Tienda responsiva con catálogo, búsqueda, filtros, carrito persistente, checkout y seguimiento mediante token opaco.
+- Tienda responsiva con catálogo, filtros por categoría, carrito persistente por presentación, checkout y seguimiento mediante token opaco.
 - Identificación de clientes por celular y acceso opcional con OTP de Supabase Auth.
 - Precios público, por lista, especiales por cliente y tramos por volumen configurables.
 - Creación transaccional de pedidos: el servidor recalcula precios, valida existencias, crea snapshots y reserva inventario.
@@ -14,6 +14,7 @@ Aplicación web en español para vender chorizos artesanales y administrar pedid
 - Kardex, recepción de compras, costo promedio, cartera, caja, auditoría y conservación histórica.
 - Cola de notificaciones y Edge Function para WhatsApp Business Cloud, con enlace manual de respaldo.
 - Exportaciones CSV, Excel compatible (`.xls`) y PDF desde reportes; exportación CSV en listados administrativos compatibles.
+- Comprobante de entrega en PDF por pedido, con detalle, saldo y espacio de firma para el cliente y para quien entrega.
 - PWA instalable con caché de recursos estáticos y del app-shell. Confirmar precios o pedidos siempre requiere conexión; ver [PWA y comportamiento sin conexión](#pwa-y-comportamiento-sin-conexión).
 - Migraciones PostgreSQL, RLS, datos de demostración, pruebas unitarias y pruebas de base de datos.
 

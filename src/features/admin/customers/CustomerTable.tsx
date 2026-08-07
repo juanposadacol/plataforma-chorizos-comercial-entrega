@@ -3,6 +3,7 @@ import { Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { Customer, PriceList } from '../types';
 import { formatAdminDate, formatMoney, firstText, toNumber } from '../utils';
+import { normalizeColombianPhone } from '../../../lib/format';
 import { useAdminData } from '../useAdminData';
 import { ResourceManager, type ResourceField } from '../components/ResourceManager';
 import { StatusBadge, type TableColumn } from '../components/AdminUi';
@@ -215,7 +216,17 @@ export function CustomerTable() {
           void address;
           void neighborhood;
           void municipality;
-          return rest;
+          // El celular se guarda siempre en su forma local de 10 dígitos, sin el
+          // indicativo 57, escriba el operador el número como lo escriba.
+          return {
+            ...rest,
+            phone:
+              typeof rest.phone === 'string' ? normalizeColombianPhone(rest.phone) : rest.phone,
+            whatsapp_phone:
+              typeof rest.whatsapp_phone === 'string'
+                ? normalizeColombianPhone(rest.whatsapp_phone)
+                : rest.whatsapp_phone,
+          };
         }}
         afterSave={async (customerId, values) => {
           await saveCustomerAddress(customerId, values, addressByCustomer.get(customerId));

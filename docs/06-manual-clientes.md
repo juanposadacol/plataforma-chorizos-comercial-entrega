@@ -5,11 +5,12 @@ La tienda permite comprar como visitante o iniciar sesión con un código SMS. E
 ## 1. Comprar como cliente nuevo
 
 1. Abra la página principal.
-2. Busque un producto por nombre o use el filtro de categoría.
+2. Use el filtro de categoría para ubicar los sabores.
 3. Revise fotografía, presentación, precio mostrado y disponibilidad (**Disponible** o **Agotado**; la tienda no muestra las cantidades en inventario).
 4. Elija la presentación del paquete: **3, 4, 6 o 10 unidades**. Las cuatro versiones tienen el mismo precio y la selección viaja con el pedido para que el negocio sepa cómo empacarlo.
 5. Use `+` y `−` para elegir cantidades. El resumen se actualiza automáticamente.
-6. Complete, empezando por el celular. Si ya compró antes, el nombre y la dirección se cargan solos y solo tiene que revisarlos:
+6. Puede pedir **el mismo sabor en varias presentaciones**: elija una presentación, ponga la cantidad, cambie de presentación y ponga la otra. Cada combinación queda como una línea propia (por ejemplo _4 × 3 unidades_ y _5 × 10 unidades_ del mismo chorizo), tanto en la tarjeta del producto como en el resumen, y cada una se puede quitar por separado.
+7. Complete, empezando por el celular. Si ya compró antes, el nombre y la dirección se cargan solos y solo tiene que revisarlos:
    - celular colombiano;
    - nombre completo;
    - dirección o punto de encuentro;
@@ -19,7 +20,7 @@ La tienda permite comprar como visitante o iniciar sesión con un código SMS. E
    - forma de pago (**Efectivo** o **Transferencia**);
    - fecha solicitada;
    - observaciones opcionales.
-7. Pulse **Confirmar pedido seguro** una sola vez y espere la respuesta.
+8. Pulse **Confirmar pedido seguro** una sola vez y espere la respuesta.
 
 Si el celular no existe, la plataforma crea el cliente con la lista pública. El cliente nunca debe elegir una categoría o lista de precios.
 
@@ -48,7 +49,7 @@ Si el celular ya pertenece a una cuenta registrada, el servidor puede exigir que
 
 ## 3. El carrito
 
-El navegador conserva temporalmente solo el identificador del producto y la cantidad. Esto permite volver a la tienda sin perder la selección en el mismo dispositivo.
+El navegador conserva temporalmente solo el identificador del producto, la presentación y la cantidad. Esto permite volver a la tienda sin perder la selección en el mismo dispositivo, incluidas las líneas del mismo producto en distintas presentaciones.
 
 - El carrito no es una reserva.
 - No guarda un precio definitivo.
