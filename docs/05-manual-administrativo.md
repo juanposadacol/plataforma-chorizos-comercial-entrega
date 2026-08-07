@@ -96,7 +96,11 @@ Las transiciones dependen del rol: ventas atiende etapas comerciales iniciales y
 
 ### Pedido manual
 
-Use **Crear pedido desde la tienda** y complete el checkout con los datos entregados por el cliente. Aunque lo haga un empleado, no invente precios en el navegador: el servidor resolverá la condición comercial asociada al cliente.
+Use **Crear pedido desde la tienda** y complete el checkout con los datos entregados por el cliente. El celular va primero: al escribirlo completo, el personal ve cargarse solos el nombre y la dirección si el cliente ya existe. Revíselos con el cliente antes de confirmar, porque pueden estar desactualizados.
+
+Esa búsqueda por celular exige rol de personal. En la tienda pública no está disponible a propósito: si cualquiera pudiera escribir un número y obtener el nombre y la dirección de casa de esa persona, la plataforma se volvería un directorio de datos personales consultable por número, con la responsabilidad legal que eso implica para el negocio. El comprador que entra por su cuenta autocompleta con lo que quedó guardado en su propio dispositivo o iniciando sesión con su celular.
+
+Aunque lo haga un empleado, no invente precios en el navegador: el servidor resolverá la condición comercial asociada al cliente.
 
 ## 6. Clientes
 
@@ -204,6 +208,18 @@ El servidor impide aprobar por encima del saldo y actualiza el estado del pedido
 ## 12. Gastos
 
 En `/admin/gastos` registre fecha, categoría, descripción, beneficiario, valor, forma de pago, cuenta, pedido relacionado, soporte y observaciones. El gasto reduce utilidad neta, no utilidad bruta.
+
+Categorías disponibles:
+
+| Categoría           | ¿Resta en la utilidad neta? |
+| ------------------- | --------------------------- |
+| Insumos             | Sí                          |
+| Mano de obra        | Sí                          |
+| Servicios           | Sí                          |
+| Arriendo            | Sí                          |
+| Pago de proveedores | No                          |
+
+**Pago de proveedores** queda registrado pero no resta en la utilidad, y es intencional: la mercancía ya descuenta utilidad como costo de ventas cuando se vende. Si además restara como gasto, el mismo desembolso se contaría dos veces y la utilidad aparecería más baja de lo real. Use esta categoría solo para dejar constancia del pago; el efecto en la utilidad ya lo produce la compra.
 
 No mezcle compras de inventario con gastos operativos ni duplique un desembolso ya reflejado en caja. Use categorías consistentes para que los reportes sean comparables.
 

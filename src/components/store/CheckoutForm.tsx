@@ -34,7 +34,7 @@ export function CheckoutForm({
   deliveryMethods,
   onSubmit,
 }: CheckoutFormProps) {
-  const { user } = useAuth();
+  const { user, access } = useAuth();
   const {
     register,
     handleSubmit,
@@ -74,37 +74,39 @@ export function CheckoutForm({
         setAutofillNotice('');
         return;
       }
-      void loadCustomerProfile(phone, Boolean(user)).then((profile: CustomerProfile | null) => {
-        if (cancelled) return;
-        if (!profile) {
-          setAutofillNotice('');
-          return;
-        }
-        const values: Record<AutofillField, string> = {
-          customerName: profile.name,
-          address: profile.address,
-          neighborhood: profile.neighborhood,
-          municipality: profile.municipality,
-        };
-        let filled = 0;
-        AUTOFILL_FIELDS.forEach((field) => {
-          const next = values[field];
-          const current = String(getValues(field) ?? '');
-          const editedByCustomer = current !== '' && current !== autofilled.current[field];
-          if (!next || editedByCustomer) return;
-          setValue(field, next, { shouldValidate: true });
-          autofilled.current[field] = next;
-          filled += 1;
-        });
-        if (filled)
-          setAutofillNotice('Cargamos tus datos guardados. Revísalos antes de confirmar.');
-      });
+      void loadCustomerProfile(phone, Boolean(user), access.isStaff).then(
+        (profile: CustomerProfile | null) => {
+          if (cancelled) return;
+          if (!profile) {
+            setAutofillNotice('');
+            return;
+          }
+          const values: Record<AutofillField, string> = {
+            customerName: profile.name,
+            address: profile.address,
+            neighborhood: profile.neighborhood,
+            municipality: profile.municipality,
+          };
+          let filled = 0;
+          AUTOFILL_FIELDS.forEach((field) => {
+            const next = values[field];
+            const current = String(getValues(field) ?? '');
+            const editedByCustomer = current !== '' && current !== autofilled.current[field];
+            if (!next || editedByCustomer) return;
+            setValue(field, next, { shouldValidate: true });
+            autofilled.current[field] = next;
+            filled += 1;
+          });
+          if (filled)
+            setAutofillNotice('Cargamos los datos guardados. Revísalos antes de confirmar.');
+        },
+      );
     }, 400);
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [phone, user, getValues, setValue]);
+  }, [phone, user, access.isStaff, getValues, setValue]);
 
   const fieldError = (name: keyof CheckoutFormValues) =>
     errors[name] ? (
