@@ -209,20 +209,19 @@ Ejecute al menos en un teléfono angosto y un navegador de escritorio:
 1. abrir tienda, filtrar por categoría y cambiar cantidades y presentaciones;
 2. recargar y comprobar carrito;
 3. validar errores de formulario y consentimiento;
-4. comprar como visitante;
-5. copiar y abrir seguimiento;
-6. iniciar sesión por OTP y ver precio/historial propios;
-7. repetir un pedido y confirmar que se recalcula;
-8. ver el pedido en el panel;
-9. transicionar, cancelar y entregar pedidos de prueba separados;
-10. descargar el comprobante de entrega en PDF de un pedido y revisar detalle, saldo y firmas;
-11. eliminar definitivamente un pedido de prueba ya pagado y entregado, y comprobar que el stock, la caja y el saldo del cliente vuelven a su valor previo;
-12. recibir compra, ajustar stock, corregir y eliminar ese ajuste comprobando que el saldo del kardex vuelve a cuadrar, y registrar pago/gasto;
-13. generar cada reporte y abrir CSV, `.xls` y PDF;
-14. probar cambio forzado del primer ingreso, invitación, recuperación y cierre de sesión;
-15. forzar fallo de WhatsApp y usar respaldo;
-16. instalar PWA, abrir offline y confirmar que no permite crear pedido;
-17. revisar teclado, foco, contraste, tablas móviles, cargas, errores y estados vacíos.
+4. comprar sin registrarse;
+5. volver a comprar con un celular ya registrado y comprobar que autocompleta y no pide acceso;
+6. usar «Volver a la tienda» desde la confirmación;
+7. ver el pedido en el panel;
+8. transicionar, cancelar y entregar pedidos de prueba separados;
+9. descargar el comprobante de entrega en PDF de un pedido y revisar detalle, saldo y firmas;
+10. eliminar definitivamente un pedido de prueba ya pagado y entregado, y comprobar que el stock, la caja y el saldo del cliente vuelven a su valor previo;
+11. recibir compra, ajustar stock, corregir y eliminar ese ajuste comprobando que el saldo del kardex vuelve a cuadrar, y registrar pago/gasto;
+12. generar cada reporte y abrir CSV, `.xls` y PDF;
+13. probar cambio forzado del primer ingreso, invitación, recuperación y cierre de sesión;
+14. forzar fallo de WhatsApp y usar respaldo;
+15. instalar PWA, abrir offline y confirmar que no permite crear pedido;
+16. revisar teclado, foco, contraste, tablas móviles, cargas, errores y estados vacíos.
 
 Pruebe la impresión del detalle, caracteres como tildes y `ñ`, valores COP grandes, límite de fechas en `America/Bogota` y archivos exportados con contenido no confiable.
 

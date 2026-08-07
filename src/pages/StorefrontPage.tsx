@@ -3,7 +3,6 @@ import { DatabaseZap, Info, ShoppingBasket } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CheckoutForm } from '../components/store/CheckoutForm';
-import { CustomerLogin } from '../components/store/CustomerLogin';
 import { Header } from '../components/store/Header';
 import { Hero } from '../components/store/Hero';
 import { MobileOrderBar } from '../components/store/MobileOrderBar';
@@ -18,7 +17,7 @@ import type { CheckoutFormValues } from '../features/orders/checkoutSchema';
 import { saveLocalProfile } from '../features/orders/customerProfile';
 import { createOrder } from '../features/orders/orderApi';
 import { env, isSupabaseConfigured } from '../lib/env';
-import { AppError, getErrorMessage } from '../lib/errors';
+import { getErrorMessage } from '../lib/errors';
 import { normalizeColombianPhone } from '../lib/format';
 
 export function StorefrontPage() {
@@ -38,7 +37,6 @@ export function StorefrontPage() {
     clear,
   } = useCart();
   const [category, setCategory] = useState('Todos');
-  const [loginOpen, setLoginOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
 
@@ -114,12 +112,6 @@ export function StorefrontPage() {
       navigate('/pedido-confirmado', { state: { order } });
     } catch (error) {
       setSubmitError(getErrorMessage(error));
-      if (
-        error instanceof AppError &&
-        (error.code === 'CUSTOMER_NOT_AUTHORIZED' || error.code === 'CUSTOMER_AUTH_REQUIRED')
-      ) {
-        setLoginOpen(true);
-      }
     } finally {
       setSubmitting(false);
     }
@@ -127,10 +119,7 @@ export function StorefrontPage() {
 
   return (
     <>
-      <Header
-        businessName={settings.data?.businessName ?? 'Chorizos Artesanales'}
-        onLogin={() => setLoginOpen(true)}
-      />
+      <Header businessName={settings.data?.businessName ?? 'Chorizos Artesanales'} />
       <main className="store-main">
         <Hero />
         {env.demoMode && (
@@ -235,11 +224,9 @@ export function StorefrontPage() {
         <nav>
           <a href="/terminos">Términos</a>
           <a href="/privacidad">Privacidad</a>
-          <a href="/seguir">Seguir pedido</a>
         </nav>
       </footer>
       <MobileOrderBar units={units} total={estimatedTotal} />
-      <CustomerLogin open={loginOpen} onClose={() => setLoginOpen(false)} />
     </>
   );
 }

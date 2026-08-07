@@ -62,7 +62,7 @@ Las funciones `SECURITY DEFINER` fijan `search_path`, validan rol o propiedad y 
 
 En un proyecto de ensayo, compruebe RLS con sesiones separadas, no solo desde SQL Editor como propietario:
 
-1. visitante: catálogo y seguimiento válido, sin lectura de tablas privadas;
+1. visitante: catálogo y creación de pedido, sin lectura de tablas privadas;
 2. cliente A: pedidos de A, rechazo al pedir datos de B;
 3. vendedor: flujo comercial permitido, finanzas privadas restringidas;
 4. bodega: ajustes/estados logísticos permitidos, asignación de precios restringida;

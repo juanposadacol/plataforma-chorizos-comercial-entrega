@@ -9,7 +9,7 @@ Esta guía cubre desarrollo local, un proyecto remoto de Supabase y la publicaci
 - Para Supabase local: Docker Desktop y Supabase CLI.
 - Para un entorno remoto: una cuenta y un proyecto de Supabase.
 - Para publicar: un sitio de Netlify y un dominio opcional.
-- Para OTP de clientes: proveedor de SMS habilitado en Supabase Auth.
+- Sin proveedor de SMS: la tienda no autentica compradores, solo personal (correo y contraseña).
 - Para WhatsApp automático: activos aprobados en Meta Business y una plantilla aprobada. WhatsApp puede dejarse en modo manual durante la puesta a punto.
 
 Compruebe las herramientas:
@@ -126,7 +126,7 @@ En Authentication > URL Configuration:
 - Redirect URLs: el dominio definitivo y los dominios de vista previa estrictamente necesarios.
 - Para recuperación administrativa, permita la ruta `/admin/acceso` del dominio autorizado.
 
-Para el acceso de clientes por OTP, configure un proveedor SMS compatible en Supabase Auth y pruebe números colombianos en formato internacional. Sin proveedor SMS, comprar como visitante sigue siendo posible, pero el inicio de sesión por código no enviará mensajes.
+La tienda no pide acceso al comprador: se identifica con su celular en el checkout, así que no hace falta configurar un proveedor SMS. El acceso del personal usa correo y contraseña de Supabase Auth.
 
 Revise también límites de envío, protección contra abuso, duración de sesión y plantillas de correo/SMS antes de producción.
 
@@ -242,7 +242,7 @@ Antes de promover el sitio:
 1. ejecute `npm run build` localmente;
 2. publique primero una vista de ensayo;
 3. agregue su URL exacta a `ALLOWED_ORIGINS` y a las redirecciones de Supabase Auth;
-4. pruebe acceso, catálogo, pedido, seguimiento, administración y recuperación de contraseña;
+4. pruebe catálogo, pedido, administración y recuperación de contraseña;
 5. asigne el dominio definitivo y repita la configuración con el dominio final.
 
 Esta guía describe el procedimiento; no implica que un sitio de Netlify o proyecto de Supabase ya hayan sido creados.
@@ -272,7 +272,7 @@ Luego realice el recorrido manual de [docs/08-pruebas.md](08-pruebas.md). Un bui
 - [ ] Primer superadministrador creado y contraseña temporal rotada.
 - [ ] Roles del equipo revisados con mínimo privilegio.
 - [ ] Dominio final registrado en Netlify, Supabase Auth y `ALLOWED_ORIGINS`.
-- [ ] OTP SMS probado o acceso de clientes comunicado como no disponible.
+- [ ] Pedido de prueba de un celular ya registrado confirmado sin pedir acceso.
 - [ ] Textos legales y consentimiento aprobados para Colombia.
 - [ ] Copias de seguridad, recuperación, monitoreo y alertas definidos.
 - [ ] Scheduler de outbox activo y observado.

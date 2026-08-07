@@ -1,8 +1,8 @@
 # Manual para clientes
 
-La tienda permite comprar como visitante o iniciar sesión con un código SMS. En ambos casos el precio final, la disponibilidad y el total se confirman en el servidor antes de crear el pedido.
+En la tienda no hay que registrarse ni iniciar sesión: el celular identifica al comprador. El precio final, la disponibilidad y el total siempre se confirman en el servidor antes de crear el pedido.
 
-## 1. Comprar como cliente nuevo
+## 1. Comprar
 
 1. Abra la página principal.
 2. Use el filtro de categoría para ubicar los sabores.
@@ -26,26 +26,13 @@ Si el celular no existe, la plataforma crea el cliente con la lista pública. El
 
 El total del resumen es estimado. Al confirmar, el servidor vuelve a consultar el producto, el cliente, el precio vigente, la tarifa de entrega y el inventario. Si algo cambió, se aplicará el valor autorizado por el servidor o se mostrará un error sin crear un pedido incompleto.
 
-## 2. Iniciar sesión como cliente registrado
+## 2. Si ya compró antes
 
-1. Pulse **Soy cliente**.
-2. Escriba su celular.
-3. Pulse **Enviar código**.
-4. Ingrese el código de seis dígitos recibido por SMS.
-5. Al completarse el acceso, el catálogo se actualiza con los precios que corresponden a la cuenta.
+No hay clave, ni código por mensaje, ni cuenta que recordar. Escriba su celular al comienzo del formulario y la tienda carga sola su nombre y su dirección de entrega para que solo los revise. Si el negocio le asignó una lista de precios propia, el pedido se calcula con ella.
 
-El código es de un solo uso. La plataforma no guarda un PIN recuperable ni una contraseña de cliente en texto plano. Nunca comparta el código con una persona que lo solicite por llamada, chat o formulario distinto de la tienda.
+Revise siempre esos datos antes de confirmar: pueden estar desactualizados si se mudó o cambió de barrio.
 
-El envío depende del proveedor SMS configurado por el negocio. Si el SMS no llega:
-
-- confirme que el número esté bien escrito;
-- espere unos minutos antes de pedir otro código;
-- revise la cobertura del teléfono;
-- contacte al negocio sin revelar códigos anteriores.
-
-Comprar como visitante puede seguir disponible aunque el OTP no esté configurado, pero **Mis pedidos** y los precios personalizados antes del checkout requieren una sesión válida.
-
-Si el celular ya pertenece a una cuenta registrada, el servidor puede exigir que inicie sesión para impedir que otra persona suplante al cliente y use su condición comercial.
+Como el celular es la identificación, quien lo conozca puede pedir a su nombre. El negocio confirma cada pedido antes de despacharlo, así que avise si recibe una confirmación que usted no hizo.
 
 ## 3. El carrito
 
@@ -68,7 +55,7 @@ Una compra válida muestra:
 
 Ver esta pantalla significa que el pedido ya fue guardado. WhatsApp es una notificación separada: si no abre, tarda o falla, el pedido no se pierde.
 
-La pantalla de confirmación ya no muestra estado, pago, notificación, enlace de seguimiento ni botón para volver a la tienda: anote el consecutivo del pedido, que es el dato que el negocio necesita para atenderlo.
+Anote el consecutivo del pedido: es el dato que el negocio necesita para atenderlo. Desde la misma pantalla puede **volver a la tienda** o **hacer otro pedido**.
 
 ## 5. WhatsApp de respaldo
 
@@ -82,47 +69,11 @@ No modifique cantidades o total dentro del mensaje para solicitar cambios. Pida 
 
 El botón manual no confirma el pago y no crea un segundo pedido.
 
-## 6. Seguir un pedido
+## 6. Cerrar sesión
 
-Abra **Seguir pedido** o visite `/seguir`.
+**Salir** solo aparece con una sesión del personal del negocio abierta. Como comprador no hay sesión que cerrar: la tienda no guarda ningún acceso suyo en el navegador, solo el carrito.
 
-1. Pegue el código de seguimiento. Los clientes con sesión iniciada lo encuentran en **Mis pedidos**; quien compra como visitante debe solicitarlo al negocio, porque la pantalla de confirmación ya no lo publica.
-2. Pulse **Consultar**.
-3. Revise número, total, productos, estado e historial.
-
-Estados habituales:
-
-| Estado                    | Significado                                               |
-| ------------------------- | --------------------------------------------------------- |
-| Nuevo                     | El pedido fue guardado                                    |
-| Pendiente de confirmación | El negocio está verificando la solicitud                  |
-| Confirmado                | El negocio aceptó el pedido                               |
-| En preparación            | Los productos están en proceso                            |
-| Listo                     | El pedido está preparado                                  |
-| Despachado                | Salió hacia el punto de entrega                           |
-| Entregado                 | La entrega fue registrada                                 |
-| Cancelado                 | El pedido no continuará; el negocio conserva el historial |
-| Devuelto                  | Se registró una devolución total                          |
-
-El token de seguimiento es un dato privado. No lo publique: quien lo posea puede consultar el resumen permitido de ese pedido. La dirección completa y la información interna no se muestran en el seguimiento público.
-
-## 7. Mis pedidos y repetir compra
-
-Con una sesión de cliente abierta, el menú muestra **Mis pedidos**.
-
-- Consulte fecha, consecutivo, productos, estado y total.
-- Abra el seguimiento de cualquier pedido propio.
-- Use **Repetir** para volver a cargar en el carrito los productos que sigan identificables en el catálogo.
-
-Repetir no reutiliza precios, disponibilidad, domicilio ni total antiguos. Revise el carrito y complete de nuevo el checkout; el servidor aplicará las reglas vigentes.
-
-Si un producto fue retirado, no está activo o ya no tiene existencia, puede no agregarse o el servidor puede rechazarlo al confirmar.
-
-## 8. Cerrar sesión
-
-Pulse **Salir** en el menú, en especial si usa un teléfono compartido. Cerrar sesión no borra los pedidos; solo termina el acceso autenticado en ese navegador.
-
-## 9. Instalar la aplicación
+## 7. Instalar la aplicación
 
 En navegadores compatibles puede usar **Instalar aplicación** o **Agregar a pantalla de inicio**. La versión instalada conserva el acceso rápido y algunos recursos visuales.
 
@@ -130,13 +81,12 @@ Sin conexión, la aplicación puede abrir la pantalla guardada en el dispositivo
 
 - consultar un precio personalizado vigente;
 - validar inventario;
-- iniciar sesión;
 - crear o cambiar un pedido;
 - confirmar un pago.
 
 Todas esas acciones consultan el servidor y fallarán hasta que recupere la conexión. Espere a recuperarla y vuelva a intentar. No interprete una pantalla almacenada como confirmación comercial: lo que ve puede ser información antigua guardada en el dispositivo.
 
-## 10. Errores frecuentes
+## 8. Errores frecuentes
 
 ### “Falta conectar la tienda”
 
@@ -150,22 +100,18 @@ Otra compra pudo reservar las últimas unidades o el stock cambió. Ajuste la ca
 
 La protección contra abuso bloqueó temporalmente nuevas solicitudes. Espere el período indicado y no recargue repetidamente.
 
-### “No encontramos el pedido”
-
-Compruebe que copió completo el código de seguimiento. No use el consecutivo comercial como si fuera el token.
-
 ### El total confirmado difiere del estimado
 
 El servidor pudo aplicar la lista autorizada, un precio especial vigente, una tarifa o una actualización comercial. Revise la confirmación y contacte al negocio antes de pagar si necesita aclaración.
 
 ### WhatsApp no abrió
 
-El pedido ya puede estar guardado. Use el seguimiento y contacte al número oficial; no repita el checkout sin comprobar primero el consecutivo.
+El pedido ya puede estar guardado. Contacte al número oficial del negocio con el consecutivo antes de repetir el checkout.
 
-## 11. Privacidad y seguridad
+## 9. Privacidad y seguridad
 
 - Use solamente el dominio comunicado por el negocio.
-- No envíe códigos OTP, contraseñas ni datos bancarios por formularios no oficiales.
+- El negocio nunca le pedirá una clave ni un código por mensaje para comprar: no entregue datos bancarios en formularios que no sean el checkout oficial.
 - Revise la política de privacidad y los términos antes de comprar.
 - Comparta dirección y observaciones solo en el checkout.
 - No incluya información sensible innecesaria en observaciones.

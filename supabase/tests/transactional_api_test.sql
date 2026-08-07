@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(33);
+select plan(35);
 
 select is(
   (select unit_price from public.resolve_product_price_internal(
@@ -19,13 +19,26 @@ select is(
 );
 
 select set_config('request.jwt.claims','{"role":"service_role"}',true);
-select throws_ok(
+
+-- El celular identifica al comprador (202608070009): un cliente que ya existe
+-- vuelve a pedir escribiendo su número, sin código de un solo uso.
+select lives_ok(
   $$select public.create_order(
-    '{"customer":{"name":"Cliente Público Demo","phone":"573001111111"},"delivery_address":"Calle 1 # 2-03","delivery_method_id":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1","payment_method_id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1","items":[{"product_id":"11111111-1111-4111-8111-111111111111","quantity":1}]}'::jsonb,
+    '{"customer":{"name":"Cliente Público Demo","phone":"573001111111"},"delivery_address":"Calle 1 # 2-03","delivery_method_id":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1","payment_method_id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1","items":[{"product_id":"33333333-3333-4333-8333-333333333333","quantity":1}]}'::jsonb,
     '90000000-0000-4000-8000-000000000001',null,'{}'::jsonb
   )$$,
-  'P0001','CUSTOMER_AUTH_REQUIRED: Este celular ya está registrado; inicia sesión con OTP',
-  'un visitante no suplanta un celular registrado'
+  'un cliente ya registrado pide con solo escribir su celular'
+);
+-- Y el pedido queda en SU ficha: no se duplica el cliente.
+select is(
+  (select customer_id from public.orders where idempotency_key='90000000-0000-4000-8000-000000000001'),
+  '40000000-0000-4000-8000-000000000001'::uuid,
+  'el pedido del cliente registrado se asocia a su ficha existente'
+);
+select is(
+  (select count(*) from public.customers where public.phone_key(phone)='3001111111' and deleted_at is null),
+  1::bigint,
+  'no se crea un cliente duplicado con el mismo celular'
 );
 
 update public.customers

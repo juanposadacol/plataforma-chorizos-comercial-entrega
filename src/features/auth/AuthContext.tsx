@@ -9,7 +9,6 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { toColombianE164 } from '../../lib/format';
 import { supabase } from '../../lib/supabase';
 import type { StaffAccess } from '../../types/domain';
 
@@ -18,8 +17,6 @@ interface AuthContextValue {
   user: User | null;
   loading: boolean;
   access: StaffAccess;
-  sendOtp: (phone: string) => Promise<void>;
-  verifyOtp: (phone: string, token: string) => Promise<void>;
   signOut: () => Promise<void>;
   refreshAccess: () => Promise<void>;
 }
@@ -71,23 +68,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => data.subscription.unsubscribe();
   }, [refreshAccess]);
 
-  const sendOtp = useCallback(async (phone: string) => {
-    if (!supabase) throw new Error('Supabase no está configurado.');
-    // El SMS se marca con indicativo; el celular se guarda sin él.
-    const { error } = await supabase.auth.signInWithOtp({ phone: toColombianE164(phone) });
-    if (error) throw error;
-  }, []);
-
-  const verifyOtp = useCallback(async (phone: string, token: string) => {
-    if (!supabase) throw new Error('Supabase no está configurado.');
-    const { error } = await supabase.auth.verifyOtp({
-      phone: toColombianE164(phone),
-      token,
-      type: 'sms',
-    });
-    if (error) throw error;
-  }, []);
-
   const signOut = useCallback(async () => {
     if (supabase) await supabase.auth.signOut();
   }, []);
@@ -98,12 +78,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user: session?.user ?? null,
       loading,
       access,
-      sendOtp,
-      verifyOtp,
       signOut,
       refreshAccess,
     }),
-    [session, loading, access, sendOtp, verifyOtp, signOut, refreshAccess],
+    [session, loading, access, signOut, refreshAccess],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

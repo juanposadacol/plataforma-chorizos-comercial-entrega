@@ -30,11 +30,13 @@ El frontend muestra una estimación, pero no envía un precio definitivo. Postgr
 
 **Consecuencia:** la validación no está duplicada como autoridad en React y una falla intermedia no deja un pedido parcial.
 
-### D-05. Visitantes y clientes con OTP
+### D-05. El celular identifica al comprador
 
-Un visitante puede comprar con datos mínimos y recibe lista pública si su celular no existe. Un cliente enlazado a Auth usa un código SMS de un solo uso para ver su catálogo e historial. No se almacena un PIN recuperable en texto plano.
+El comprador no se registra ni inicia sesión: escribe su celular y con eso la tienda lo reconoce, autocompleta su entrega y aplica su lista de precios. Si el número no existe, se crea el cliente con la lista pública. El acceso autenticado (Supabase Auth) queda reservado al personal del negocio.
 
-**Consecuencia:** el OTP depende de un proveedor SMS externo; comprar y autenticarse son capacidades distintas.
+La versión anterior exigía un código SMS de un solo uso a todo celular ya registrado. Como el proyecto no tiene proveedor de SMS contratado, eso dejaba sin poder comprar justamente a los clientes que repetían (202608070009).
+
+**Consecuencia:** quien conozca un celular registrado puede pedir a ese nombre y ver los precios de esa lista. Es una decisión comercial explícita para una base de pocas decenas de clientes donde cada pedido se confirma antes de despachar. Documento, correo, saldo, cupo e historial siguen sin salir del panel.
 
 ### D-06. Reservar antes de vender
 
@@ -107,12 +109,11 @@ Los listados exportan CSV y el módulo de reportes agrega SpreadsheetML `.xls` y
 
 ### Tienda y cliente
 
-- Catálogo desde Supabase con búsqueda, categoría, destacados, disponibilidad y precio efectivo.
-- Carrito persistente de cantidades y diseño responsivo.
+- Catálogo desde Supabase con filtro por categoría, destacados, disponibilidad y precio efectivo.
+- Carrito persistente por producto y presentación, y diseño responsivo.
 - Checkout validado con nombre, celular, entrega, pago, fecha, observaciones y consentimiento.
-- Creación de pedido por Edge Function y confirmación con consecutivo, total y token opaco.
-- Seguimiento público limitado e historial de pedidos propios.
-- Acceso por OTP, cierre de sesión y repetición de productos de un pedido anterior.
+- Creación de pedido por Edge Function y confirmación con consecutivo, total y salida a la tienda.
+- Checkout sin registro: el celular autocompleta nombre y dirección de entrega.
 - Recuperación administrativa y cambio obligatorio de la contraseña temporal al primer ingreso.
 - Términos y privacidad alimentados por configuración pública con aviso cuando falta contenido aprobado.
 - PWA, pantalla offline y assets originales.

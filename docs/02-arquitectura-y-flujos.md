@@ -81,7 +81,7 @@ sequenceDiagram
 
 ## Identidad
 
-- Cliente recurrente: OTP SMS de Supabase al celular; no se guarda PIN recuperable.
+- Cliente recurrente: se reconoce por el celular escrito en el checkout; no inicia sesión ni guarda clave. La sesión de Supabase Auth queda solo para el personal.
 - Cliente nuevo: puede comprar con datos mínimos y queda en lista Pública.
 - Personal: email/contraseña de Supabase; se recomienda MFA en producción.
 - `profiles`, `roles` y `user_roles` deciden autorización. Los botones ocultos no sustituyen RLS.
