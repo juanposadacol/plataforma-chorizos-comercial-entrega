@@ -137,7 +137,7 @@ El detalle de cliente muestra historial de pedidos, métricas de compra, saldo y
 
 La columna **Ubicación** se llena sola: al crear un pedido, la dirección escrita en el checkout queda guardada en la libreta del cliente. Si el cliente pide desde otra dirección, la nueva se agrega y la primera sigue siendo la principal; el autocompletado usa la principal.
 
-El acceso normal de clientes usa OTP de Supabase. Si la instalación conserva un hash de PIN por compatibilidad, **Restablecer PIN** lo invalida y limpia los intentos/bloqueo; no genera una contraseña recuperable. Oriente al cliente a usar OTP. El hash no se expone por la API.
+Los clientes no tienen acceso a la plataforma: se identifican por su celular al pedir. Si la instalación conserva un hash de PIN de versiones anteriores, **Restablecer PIN** lo invalida y limpia intentos y bloqueo; no genera una contraseña recuperable ni habilita un acceso. El hash no se expone por la API.
 
 Para retirar un cliente de la operación, use desactivación. No elimine físicamente registros vinculados a pedidos o saldos.
 

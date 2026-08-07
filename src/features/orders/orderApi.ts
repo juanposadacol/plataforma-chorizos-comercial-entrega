@@ -1,7 +1,7 @@
 import { AppError } from '../../lib/errors';
 import { env, isSupabaseConfigured } from '../../lib/env';
 import { supabase } from '../../lib/supabase';
-import type { OrderRequest, OrderResult, TrackingOrder } from '../../types/domain';
+import type { OrderRequest, OrderResult } from '../../types/domain';
 
 export const sanitizeOrderPayload = (input: OrderRequest): OrderRequest => ({
   idempotency_key: input.idempotency_key,
@@ -53,9 +53,12 @@ export const createOrder = async (request: OrderRequest): Promise<OrderResult> =
       code = 'NETWORK_OR_CORS_ERROR';
       message = 'No pudimos contactar al servidor. Revisa tu conexión e intenta de nuevo.';
     }
+    // La tienda ya no pide clave ni código: el celular es la identificación. Si
+    // el servidor todavía rechaza por sesión (base sin la migración
+    // 202608070009), el mensaje no puede mandar a un acceso que ya no existe.
     if (code === 'CUSTOMER_NOT_AUTHORIZED' || code === 'CUSTOMER_AUTH_REQUIRED') {
       message =
-        'Este celular ya está registrado. Inicia sesión con el código SMS para usar sus precios.';
+        'No pudimos usar ese celular para el pedido. Comunícate con el negocio para confirmarlo.';
     }
     // Solo en desarrollo, y solo código y estado: nunca tokens, datos del
     // cliente ni el cuerpo del pedido.
@@ -68,28 +71,3 @@ export const createOrder = async (request: OrderRequest): Promise<OrderResult> =
     throw new AppError('El servidor no confirmó el pedido.', 'INVALID_RESPONSE');
   return data;
 };
-
-export const getOrderTracking = async (token: string): Promise<TrackingOrder> => {
-  if (!supabase) throw new AppError('Supabase no está configurado.', 'SUPABASE_NOT_CONFIGURED');
-  const { data, error } = await supabase.rpc('get_order_tracking', { p_tracking_token: token });
-  if (error || !data)
-    throw new AppError('No encontramos un pedido con ese enlace.', 'ORDER_NOT_FOUND');
-  return (Array.isArray(data) ? data[0] : data) as TrackingOrder;
-};
-
-export const getMyOrders = async (): Promise<TrackingOrder[]> => {
-  if (!supabase) return [];
-  const { data, error } = await supabase.rpc('get_my_orders');
-  if (error) throw error;
-  return (data ?? []) as TrackingOrder[];
-};
-
-export const repeatOrderItems = (
-  order: TrackingOrder,
-): Array<{ productId: string; quantity: number }> =>
-  order.items
-    .filter((item) => Boolean(item.product_id))
-    .map((item) => ({
-      productId: String(item.product_id),
-      quantity: Number(item.quantity),
-    }));

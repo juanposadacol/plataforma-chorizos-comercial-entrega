@@ -1,4 +1,11 @@
-import { CheckCircle2, ExternalLink, MessageCircle, PackageCheck } from 'lucide-react';
+import {
+  CheckCircle2,
+  ExternalLink,
+  MessageCircle,
+  PackageCheck,
+  ShoppingBasket,
+  Store,
+} from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { formatMoney } from '../lib/format';
 import type { OrderResult } from '../types/domain';
@@ -11,9 +18,9 @@ export function OrderConfirmationPage() {
       <main className="center-page">
         <PackageCheck />
         <h1>No hay una confirmación reciente</h1>
-        <p>Si ya hiciste un pedido, consúltalo con su enlace de seguimiento.</p>
-        <Link className="primary-button" to="/seguir">
-          Seguir un pedido
+        <p>Si ya hiciste un pedido, el negocio lo tiene guardado con su número.</p>
+        <Link className="primary-button" to="/">
+          Volver a la tienda
         </Link>
       </main>
     );
@@ -49,6 +56,15 @@ export function OrderConfirmationPage() {
             </a>
           </div>
         )}
+        {/* Salida clara: la compra termina, pero la tienda sigue a un toque. */}
+        <div className="confirmation-back">
+          <Link className="primary-button" to="/">
+            <Store aria-hidden="true" /> Volver a la tienda
+          </Link>
+          <Link className="inline-button" to="/#catalogo">
+            <ShoppingBasket aria-hidden="true" /> Hacer otro pedido
+          </Link>
+        </div>
       </section>
     </main>
   );

@@ -4,11 +4,9 @@ import { LoadingState } from './components/ui/AsyncState';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { AdminGuard } from './features/auth/AdminGuard';
 import { AdminLoginPage } from './pages/AdminLoginPage';
-import { CustomerOrdersPage } from './pages/CustomerOrdersPage';
 import { LegalPage } from './pages/LegalPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { OrderConfirmationPage } from './pages/OrderConfirmationPage';
-import { OrderTrackingPage } from './pages/OrderTrackingPage';
 import { StorefrontPage } from './pages/StorefrontPage';
 
 const AdminLayout = lazy(() =>
@@ -71,8 +69,7 @@ const SettingsPage = lazy(() =>
 // funciona incluso si otra ruta quedó en estado de error.
 const publicErrorBoundaryProps = {
   title: 'Ocurrió un error inesperado',
-  description:
-    'No pudimos mostrar esta página. Puedes intentarlo de nuevo o volver a la tienda.',
+  description: 'No pudimos mostrar esta página. Puedes intentarlo de nuevo o volver a la tienda.',
   backHref: '/',
   backLabel: 'Volver a la tienda',
 };
@@ -104,30 +101,6 @@ export function App() {
           }
         />
         <Route
-          path="/seguir"
-          element={
-            <ErrorBoundary {...publicErrorBoundaryProps}>
-              <OrderTrackingPage />
-            </ErrorBoundary>
-          }
-        />
-        <Route
-          path="/seguir/:token"
-          element={
-            <ErrorBoundary {...publicErrorBoundaryProps}>
-              <OrderTrackingPage />
-            </ErrorBoundary>
-          }
-        />
-        <Route
-          path="/mis-pedidos"
-          element={
-            <ErrorBoundary {...publicErrorBoundaryProps}>
-              <CustomerOrdersPage />
-            </ErrorBoundary>
-          }
-        />
-        <Route
           path="/privacidad"
           element={
             <ErrorBoundary {...publicErrorBoundaryProps}>
@@ -153,7 +126,14 @@ export function App() {
         />
         <Route path="/admin/login" element={<Navigate to="/admin/acceso" replace />} />
         <Route element={<AdminGuard />}>
-          <Route path="/admin" element={<ErrorBoundary><AdminLayout /></ErrorBoundary>}>
+          <Route
+            path="/admin"
+            element={
+              <ErrorBoundary>
+                <AdminLayout />
+              </ErrorBoundary>
+            }
+          >
             <Route index element={<AdminDashboardPage />} />
             <Route path="pedidos" element={<OrdersPage />} />
             <Route path="pedidos/:id" element={<OrderDetailPage />} />

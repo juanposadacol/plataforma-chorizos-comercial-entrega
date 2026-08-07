@@ -6,8 +6,8 @@ Aplicación web en español para vender chorizos artesanales y administrar pedid
 
 ## Qué incluye
 
-- Tienda responsiva con catálogo, filtros por categoría, carrito persistente por presentación, checkout y seguimiento mediante token opaco.
-- Identificación de clientes por celular y acceso opcional con OTP de Supabase Auth.
+- Tienda responsiva con catálogo, filtros por categoría, carrito persistente por presentación y checkout sin registro.
+- El comprador se identifica escribiendo su celular: sin cuenta, sin clave y sin código por mensaje. El acceso autenticado queda reservado al personal del negocio.
 - Precios público, por lista, especiales por cliente y tramos por volumen configurables.
 - Creación transaccional de pedidos: el servidor recalcula precios, valida existencias, crea snapshots y reserva inventario.
 - Panel privado con pedidos, clientes, productos, precios, inventario, compras, proveedores, pagos, gastos, reportes, usuarios, notificaciones y configuración.

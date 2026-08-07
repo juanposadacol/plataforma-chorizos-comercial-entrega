@@ -1,14 +1,18 @@
-import { LogIn, LogOut, Menu, PackageSearch, ShieldCheck, UserRound, X } from 'lucide-react';
+import { LogOut, Menu, ShieldCheck, X } from 'lucide-react';
 import { useState } from 'react';
 import { Link, NavLink } from 'react-router-dom';
 import { useAuth } from '../../features/auth/AuthContext';
 
 interface HeaderProps {
   businessName: string;
-  onLogin: () => void;
 }
 
-export function Header({ businessName, onLogin }: HeaderProps) {
+/**
+ * El comprador no inicia sesión: se identifica escribiendo su celular en el
+ * checkout. Por eso el menú solo ofrece la tienda; "Administración" y "Salir"
+ * aparecen únicamente cuando hay una sesión del personal.
+ */
+export function Header({ businessName }: HeaderProps) {
   const [open, setOpen] = useState(false);
   const { user, access, signOut } = useAuth();
   return (
@@ -37,26 +41,14 @@ export function Header({ businessName, onLogin }: HeaderProps) {
         <NavLink to="/" onClick={() => setOpen(false)}>
           Tienda
         </NavLink>
-        <NavLink to="/seguir" onClick={() => setOpen(false)}>
-          <PackageSearch aria-hidden="true" /> Seguir pedido
-        </NavLink>
-        {user && (
-          <NavLink to="/mis-pedidos" onClick={() => setOpen(false)}>
-            <UserRound aria-hidden="true" /> Mis pedidos
-          </NavLink>
-        )}
         {access.isStaff && (
           <NavLink to="/admin" onClick={() => setOpen(false)}>
             <ShieldCheck aria-hidden="true" /> Administración
           </NavLink>
         )}
-        {user ? (
+        {user && (
           <button className="nav-auth" onClick={() => void signOut()}>
             <LogOut aria-hidden="true" /> Salir
-          </button>
-        ) : (
-          <button className="nav-auth" onClick={onLogin}>
-            <LogIn aria-hidden="true" /> Soy cliente
           </button>
         )}
       </nav>

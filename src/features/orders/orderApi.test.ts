@@ -139,7 +139,10 @@ describe('createOrder — conserva el code y el message del backend', () => {
     });
   });
 
-  it('un cliente ya registrado recibe la invitación a iniciar sesión', async () => {
+  // La tienda ya no tiene acceso de cliente: el celular es la identificación.
+  // Si el servidor rechaza por sesión, el mensaje no puede mandar al comprador a
+  // un acceso que no existe; lo remite al negocio.
+  it('un rechazo por sesión no invita a iniciar sesión: remite al negocio', async () => {
     invoke.mockResolvedValue({
       data: null,
       error: httpError(403, {
@@ -149,7 +152,10 @@ describe('createOrder — conserva el code y el message del backend', () => {
 
     await expect(createOrder(REQUEST)).rejects.toMatchObject({
       code: 'CUSTOMER_NOT_AUTHORIZED',
-      message: expect.stringContaining('Inicia sesión'),
+      message: expect.stringContaining('Comunícate con el negocio'),
+    });
+    await expect(createOrder(REQUEST)).rejects.toMatchObject({
+      message: expect.not.stringContaining('sesión con el código'),
     });
   });
 });

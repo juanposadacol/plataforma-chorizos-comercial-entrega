@@ -1348,6 +1348,19 @@ textarea[aria-invalid='true'] {
   gap: 10px;
   margin-top: 20px;
 }
+/* Salida de la confirmación: volver a la tienda o empezar otro pedido. */
+.confirmation-back {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin-top: 22px;
+  padding-top: 22px;
+  border-top: 1px solid var(--line);
+}
+.confirmation-back .primary-button {
+  width: 100%;
+}
 .confirmation-actions .whatsapp-button,
 .confirmation-actions .text-link {
   grid-column: 1/-1;
