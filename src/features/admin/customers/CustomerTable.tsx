@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { Customer, PriceList } from '../types';
@@ -7,6 +7,11 @@ import { useAdminData } from '../useAdminData';
 import { ResourceManager, type ResourceField } from '../components/ResourceManager';
 import { StatusBadge, type TableColumn } from '../components/AdminUi';
 import { DeleteCustomerModal } from './DeleteCustomerModal';
+import {
+  primaryAddressByCustomer,
+  saveCustomerAddress,
+  type CustomerAddress,
+} from './customerAddress';
 
 export function CustomerTable() {
   const [deleting, setDeleting] = useState<Customer | null>(null);
@@ -16,6 +21,28 @@ export function CustomerTable() {
     ascending: true,
     limit: 100,
   });
+  const { data: addresses, reload: reloadAddresses } = useAdminData<CustomerAddress>(
+    'customer_addresses',
+    { orderBy: 'created_at', limit: 2000 },
+  );
+  const addressByCustomer = useMemo(() => primaryAddressByCustomer(addresses), [addresses]);
+
+  // La dirección no es columna de `customers`: se trae de la libreta para
+  // mostrarla en la tabla y precargar el formulario.
+  const mapRows = useCallback(
+    (rows: Customer[]): Customer[] =>
+      rows.map((row) => {
+        const address = addressByCustomer.get(row.id);
+        if (!address) return row;
+        return {
+          ...row,
+          address: address.address_line,
+          neighborhood: address.neighborhood ?? '',
+          municipality: address.municipality ?? '',
+        };
+      }),
+    [addressByCustomer],
+  );
   const fields: ResourceField[] = [
     {
       key: 'full_name',
@@ -24,7 +51,12 @@ export function CustomerTable() {
       placeholder: 'Nombre o razón social',
     },
     { key: 'phone', label: 'Celular', type: 'tel', required: true, placeholder: '300 000 0000' },
-    { key: 'whatsapp', label: 'WhatsApp', type: 'tel', placeholder: 'Si es diferente al celular' },
+    {
+      key: 'whatsapp_phone',
+      label: 'WhatsApp',
+      type: 'tel',
+      placeholder: 'Si es diferente al celular',
+    },
     { key: 'email', label: 'Correo', type: 'email', placeholder: 'cliente@correo.com' },
     { key: 'document_number', label: 'Número de documento' },
     { key: 'address', label: 'Dirección principal', fullWidth: true },
@@ -176,6 +208,19 @@ export function CustomerTable() {
         activeValue="active"
         inactiveValue="inactive"
         realtime
+        mapRows={mapRows}
+        beforeSave={(payload) => {
+          // `customers` no tiene columnas de dirección; van a `customer_addresses`.
+          const { address, neighborhood, municipality, ...rest } = payload;
+          void address;
+          void neighborhood;
+          void municipality;
+          return rest;
+        }}
+        afterSave={async (customerId, values) => {
+          await saveCustomerAddress(customerId, values, addressByCustomer.get(customerId));
+          await reloadAddresses();
+        }}
         rowActions={(customer, reload) => (
           <button
             type="button"

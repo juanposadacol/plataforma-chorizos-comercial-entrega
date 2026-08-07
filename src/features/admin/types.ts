@@ -13,13 +13,7 @@ export type OrderStatus =
 
 // Nota: 'under_review' es el valor real en la BD (el alias 'verifying' era incorrecto).
 export type PaymentStatus =
-  | 'pending'
-  | 'under_review'
-  | 'partial'
-  | 'paid'
-  | 'credit'
-  | 'rejected'
-  | 'refunded';
+  'pending' | 'under_review' | 'partial' | 'paid' | 'credit' | 'rejected' | 'refunded';
 
 export interface AdminOrder extends AdminRecord {
   order_number?: string;
@@ -96,8 +90,12 @@ export interface Customer extends AdminRecord {
   document_type?: string | null;
   document_number?: string | null;
   phone: string;
-  whatsapp?: string | null;
+  whatsapp_phone?: string | null;
   email?: string | null;
+  /**
+   * La dirección no es columna de `customers`: vive en `customer_addresses` y
+   * se adjunta a la fila para mostrarla y editarla desde la ficha.
+   */
   address?: string | null;
   neighborhood?: string | null;
   municipality?: string | null;

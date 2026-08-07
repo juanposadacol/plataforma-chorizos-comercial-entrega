@@ -51,6 +51,18 @@ interface ResourceManagerProps<T extends AdminRecord> {
   inactiveValue?: string | boolean;
   realtime?: boolean;
   beforeSave?: (values: Record<string, unknown>, editing: T | null) => Record<string, unknown>;
+  /**
+   * Guardado complementario en otra tabla, con el id ya disponible. Recibe los
+   * valores del formulario ANTES de `beforeSave`, para poder usar campos que
+   * ese paso haya retirado del payload principal.
+   */
+  afterSave?: (
+    id: string,
+    values: Record<string, unknown>,
+    editing: T | null,
+  ) => Promise<void> | void;
+  /** Completa cada fila con datos de otra tabla (por ejemplo la dirección del cliente). */
+  mapRows?: (rows: T[]) => T[];
   toolbarExtra?: ReactNode;
   renderDetails?: (row: T) => ReactNode;
   /** Acciones adicionales por fila (por ejemplo eliminar). Recibe `reload` para refrescar. */
@@ -85,15 +97,20 @@ export function ResourceManager<T extends AdminRecord>({
   inactiveValue = false,
   realtime = false,
   beforeSave,
+  afterSave,
+  mapRows,
   toolbarExtra,
   renderDetails,
   rowActions,
 }: ResourceManagerProps<T>) {
-  const { data, loading, refreshing, error, reload } = useAdminData<T>(
-    table,
-    { orderBy, ascending: orderBy === 'name', limit: 1000 },
-    realtime,
-  );
+  const {
+    data: rawData,
+    loading,
+    refreshing,
+    error,
+    reload,
+  } = useAdminData<T>(table, { orderBy, ascending: orderBy === 'name', limit: 1000 }, realtime);
+  const data = useMemo(() => (mapRows ? mapRows(rawData) : rawData), [rawData, mapRows]);
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState<T | null>(null);
   const [formOpen, setFormOpen] = useState(false);
@@ -133,9 +150,12 @@ export function ResourceManager<T extends AdminRecord>({
         else if (field.type === 'checkbox') payload[field.key] = Boolean(value);
         else payload[field.key] = value === '' ? null : value;
       });
+      const formValues = { ...payload };
       payload = beforeSave?.(payload, editing) ?? payload;
+      let savedId = editing?.id ?? '';
       if (editing) await updateRecord(table, editing.id, payload);
-      else await insertRecord(table, payload);
+      else savedId = (await insertRecord<AdminRecord>(table, payload)).id;
+      if (savedId) await afterSave?.(savedId, formValues, editing);
       setFormOpen(false);
       setSuccess(editing ? 'Cambios guardados correctamente.' : 'Registro creado correctamente.');
       window.setTimeout(() => setSuccess(null), 3500);
