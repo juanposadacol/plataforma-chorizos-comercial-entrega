@@ -48,12 +48,38 @@ export const formatSqlDate = (value: string): string => {
   return `${day}/${month}/${year}`;
 };
 
+/** Indicativo telefónico de Colombia. Solo se antepone al marcar, nunca al guardar. */
+export const COLOMBIA_COUNTRY_CODE = '57';
+
+/**
+ * Forma canónica en la que se GUARDA un celular colombiano: los 10 dígitos
+ * locales, sin el indicativo 57 y sin símbolos.
+ *
+ * El indicativo solo sirve para marcar (SMS de Supabase Auth, enlaces de
+ * WhatsApp), así que se retira aquí y se vuelve a anteponer con
+ * `toColombianE164` en el único momento en que hace falta. Números de otros
+ * países se devuelven completos: solo se quita un 57 que sobre 10 dígitos.
+ */
 export const normalizeColombianPhone = (value: string): string => {
   const digits = value.replace(/\D/g, '');
-  if (digits.length === 10) return `57${digits}`;
-  if (digits.startsWith('0057')) return digits.slice(2);
-  return digits;
+  // 0057 es el prefijo de marcación internacional; equivale a "+57".
+  const national = digits.startsWith('0057') ? digits.slice(4) : digits;
+  if (national.length === 12 && national.startsWith(COLOMBIA_COUNTRY_CODE))
+    return national.slice(2);
+  return national;
 };
+
+/**
+ * Formato internacional (+57XXXXXXXXXX) exigido por Supabase Auth para el SMS y
+ * útil para enlaces `wa.me`. Es la inversa de `normalizeColombianPhone`.
+ */
+export const toColombianE164 = (value: string): string => {
+  const local = normalizeColombianPhone(value);
+  return local.length === 10 ? `+${COLOMBIA_COUNTRY_CODE}${local}` : `+${local}`;
+};
+
+/** Igual que `toColombianE164` pero sin el "+", como lo requiere `https://wa.me/`. */
+export const toWhatsappPhone = (value: string): string => toColombianE164(value).slice(1);
 
 export const localDateInBogota = (daysFromToday = 0): string => {
   const formatter = new Intl.DateTimeFormat('en-CA', {
@@ -114,7 +140,15 @@ export const bogotaPartsToInstant = (
   millisecond = 0,
 ): Date =>
   new Date(
-    Date.UTC(parts.year, parts.month - 1, parts.day, hour + BOGOTA_UTC_OFFSET_HOURS, minute, second, millisecond),
+    Date.UTC(
+      parts.year,
+      parts.month - 1,
+      parts.day,
+      hour + BOGOTA_UTC_OFFSET_HOURS,
+      minute,
+      second,
+      millisecond,
+    ),
   );
 
 export const bogotaStartOfDay = (parts: BogotaDateParts): Date => bogotaPartsToInstant(parts);
@@ -124,7 +158,11 @@ export const bogotaEndOfDay = (parts: BogotaDateParts): Date =>
 export const addBogotaDays = (parts: BogotaDateParts, days: number): BogotaDateParts => {
   const utcDate = new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
   utcDate.setUTCDate(utcDate.getUTCDate() + days);
-  return { year: utcDate.getUTCFullYear(), month: utcDate.getUTCMonth() + 1, day: utcDate.getUTCDate() };
+  return {
+    year: utcDate.getUTCFullYear(),
+    month: utcDate.getUTCMonth() + 1,
+    day: utcDate.getUTCDate(),
+  };
 };
 
 /** Day of week for a Bogota calendar date, Monday = 0 ... Sunday = 6. */

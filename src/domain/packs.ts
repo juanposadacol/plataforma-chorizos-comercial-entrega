@@ -23,6 +23,26 @@ export const basePresentation = (presentation: string): string =>
     .trim() || presentation;
 
 /**
+ * Suma las líneas del carrito por producto para el pedido.
+ *
+ * El carrito distingue presentaciones (4 paquetes de 3 unidades y 5 de 10 son
+ * dos líneas), pero el inventario y el precio son por producto y el contrato de
+ * `create-order` rechaza `product_id` repetidos: aquí se consolidan en una sola
+ * línea por producto. El desglose por presentación viaja aparte, en la nota que
+ * arma `buildPackNote`. Conserva el orden en que se agregaron los productos.
+ */
+export const mergeLinesByProduct = <T extends { productId: string; quantity: number }>(
+  lines: T[],
+): Array<{ product_id: string; quantity: number }> => {
+  const totals = new Map<string, number>();
+  for (const line of lines) {
+    if (line.quantity <= 0) continue;
+    totals.set(line.productId, (totals.get(line.productId) ?? 0) + line.quantity);
+  }
+  return [...totals.entries()].map(([product_id, quantity]) => ({ product_id, quantity }));
+};
+
+/**
  * Resumen legible que viaja con el pedido para que el negocio sepa cómo empacar
  * cada línea. Se antepone a las observaciones del cliente.
  */

@@ -77,6 +77,25 @@ En `/admin/pedidos` puede buscar por consecutivo, cliente o celular; filtrar por
 
 Abra el consecutivo para consultar productos, snapshots de precio y costo, entrega, observaciones, pagos, notas internas e historial. Desde el detalle puede usar la impresión del navegador para papel o PDF.
 
+### Comprobante de entrega en PDF
+
+El botón de documento de cada fila —y **Comprobante de entrega** en el detalle— descarga un PDF de una página, listo para imprimir y llevar con el domicilio. Incluye el consecutivo, la fecha, los datos del cliente y de la entrega, el detalle de productos con cantidades y precios, el total, lo pagado, el saldo por cobrar, las observaciones del pedido (con la presentación elegida) y dos espacios de firma: **Recibí a satisfacción** para el cliente y **Entregado por** para quien despacha.
+
+Es el soporte interno de entrega del negocio; no reemplaza una factura electrónica DIAN.
+
+### Eliminar un pedido definitivamente
+
+El botón de papelera abre la eliminación definitiva de un pedido creado por error, **en cualquier estado, incluido pagado o entregado**. Requiere rol **superadministrador** y escribir el consecutivo como confirmación; el modal advierte antes lo que se va a revertir.
+
+En una sola transacción el servidor:
+
+- devuelve al inventario exactamente lo que el pedido movió (reservas, ventas y devoluciones), producto por producto;
+- elimina sus pagos y descuenta de la caja lo que esos pagos habían sumado;
+- elimina su cartera y **recalcula** los agregados del cliente (compras, saldo, ticket promedio, última compra) con lo que queda;
+- borra líneas, historial, notificaciones y la auditoría con el contenido comercial del pedido, dejando solo una huella técnica sin datos.
+
+Único caso que el servidor rechaza: que el pedido tenga un **gasto contable** asociado. Elimine primero ese gasto en `/admin/gastos` y repita la operación.
+
 ### Estados permitidos
 
 El servidor aplica la secuencia, no el navegador:
@@ -174,6 +193,15 @@ Para un ajuste:
 3. escriba cantidad y costo si corresponde;
 4. registre un motivo específico;
 5. confirme y revise el movimiento resultante.
+
+Para corregir o eliminar un ajuste mal registrado, use los botones de la columna **Acciones** del kardex:
+
+- **Editar** permite cambiar tipo, cantidad, costo y motivo del ajuste. El producto no se cambia: si se equivocó de referencia, elimine el movimiento y regístrelo de nuevo.
+- **Eliminar** revierte el efecto del ajuste sobre las existencias.
+
+En ambos casos el servidor recalcula el stock del producto y recoloca los saldos de los movimientos posteriores, así que la última fila del kardex sigue coincidiendo con la existencia real. Las dos acciones exigen rol **superadministrador** o **administrador** y quedan en la auditoría con su antes y su después.
+
+Solo se pueden corregir los ajustes **manuales** (ajuste positivo, ajuste negativo, daño y pérdida). Los movimientos que nacen de un pedido o de una compra aparecen como **Automático** y se corrigen operando ese pedido o esa compra.
 
 Nunca edite `stock_on_hand` o `stock_reserved` directamente. Las funciones transaccionales bloquean filas, protegen reservas y registran saldo anterior y posterior. Una discrepancia física debe documentarse como movimiento, no ocultarse.
 

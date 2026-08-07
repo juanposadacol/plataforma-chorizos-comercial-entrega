@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatSqlDate } from './format';
+import { formatSqlDate, normalizeColombianPhone, toColombianE164, toWhatsappPhone } from './format';
 
 // Regresión: el reporte "Ventas por día" mostraba una venta entregada el
 // 2026-07-18 (Bogotá) como si hubiera ocurrido el 17/07/2026. Causa raíz:
@@ -43,4 +43,46 @@ describe('formatSqlDate — columnas PostgreSQL DATE (sin hora/zona horaria)', (
     expect(formatSqlDate.toString()).not.toMatch(/Intl\./);
     expect(formatSqlDate('2026-07-18')).toBe('18/07/2026');
   });
+});
+
+// El celular se guarda como lo escribe y lo dicta el negocio: 10 dígitos, sin el
+// indicativo 57. El 57 solo se antepone al marcar (SMS de Supabase Auth y wa.me).
+describe('normalizeColombianPhone — el celular se guarda sin el indicativo 57', () => {
+  it('quita el 57 de un número guardado en el formato anterior', () => {
+    expect(normalizeColombianPhone('573013350356')).toBe('3013350356');
+    expect(normalizeColombianPhone('+57 301 335 0356')).toBe('3013350356');
+    expect(normalizeColombianPhone('0057 3013350356')).toBe('3013350356');
+  });
+
+  it('deja intacto un celular local ya normalizado', () => {
+    expect(normalizeColombianPhone('3013350356')).toBe('3013350356');
+    expect(normalizeColombianPhone('301 335 0356')).toBe('3013350356');
+    expect(normalizeColombianPhone('(301) 335-0356')).toBe('3013350356');
+  });
+
+  it('no confunde un 57 que no es indicativo', () => {
+    // 5712345678 son 10 dígitos: es el número completo, no un 57 + 8 dígitos.
+    expect(normalizeColombianPhone('5712345678')).toBe('5712345678');
+    // Un número internacional de otro país conserva todos sus dígitos.
+    expect(normalizeColombianPhone('+34 600 123 456')).toBe('34600123456');
+  });
+
+  it('es idempotente: normalizar dos veces da lo mismo', () => {
+    const once = normalizeColombianPhone('573013350356');
+    expect(normalizeColombianPhone(once)).toBe(once);
+  });
+});
+
+describe('toColombianE164 / toWhatsappPhone — el indicativo vuelve solo al marcar', () => {
+  it('devuelve el formato internacional que exige el SMS', () => {
+    expect(toColombianE164('3013350356')).toBe('+573013350356');
+    expect(toColombianE164('573013350356')).toBe('+573013350356');
+    expect(toColombianE164('+57 301 335 0356')).toBe('+573013350356');
+  });
+
+  it('arma el número de los enlaces wa.me sin el "+"', () =>
+    expect(toWhatsappPhone('3013350356')).toBe('573013350356'));
+
+  it('es la inversa exacta de normalizeColombianPhone', () =>
+    expect(normalizeColombianPhone(toColombianE164('3013350356'))).toBe('3013350356'));
 });

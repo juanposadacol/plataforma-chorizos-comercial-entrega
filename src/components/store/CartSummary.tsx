@@ -1,29 +1,31 @@
 import { ArrowRight, LockKeyhole, ShoppingBag, Trash2 } from 'lucide-react';
-import { DEFAULT_PACK_SIZE, packSizeLabel, type PackSize } from '../../domain/packs';
+import { packSizeLabel } from '../../domain/packs';
 import { formatMoney } from '../../lib/format';
-import type { Product, SelectOption } from '../../types/domain';
+import type { CartLine, Product, SelectOption } from '../../types/domain';
 
 export function CartSummary({
   products,
-  quantities,
-  packSizes,
+  lines,
   deliveryMethod,
-  onRemove,
+  onRemoveLine,
 }: {
   products: Product[];
-  quantities: Record<string, number>;
-  packSizes: Record<string, PackSize>;
+  /** Una fila por producto y presentación. */
+  lines: CartLine[];
   deliveryMethod?: SelectOption;
-  onRemove: (id: string) => void;
+  onRemoveLine: (key: string) => void;
 }) {
-  const selected = products.filter((product) => (quantities[product.id] ?? 0) > 0);
-  const subtotal = selected.reduce(
-    (sum, product) => sum + product.effective_price * (quantities[product.id] ?? 0),
+  const productById = new Map(products.map((product) => [product.id, product]));
+  const rows = lines
+    .map((line) => ({ line, product: productById.get(line.productId) }))
+    .filter((row): row is { line: CartLine; product: Product } => Boolean(row.product));
+  const subtotal = rows.reduce(
+    (sum, { line, product }) => sum + product.effective_price * line.quantity,
     0,
   );
   const fee = Number(deliveryMethod?.fee ?? 0);
   const total = subtotal + fee;
-  const units = selected.reduce((sum, product) => sum + (quantities[product.id] ?? 0), 0);
+  const units = rows.reduce((sum, { line }) => sum + line.quantity, 0);
   return (
     <aside className="cart-summary card" aria-label="Resumen del pedido">
       <div className="card-title">
@@ -34,7 +36,7 @@ export function CartSummary({
           <p>Precios informativos; se validan al confirmar.</p>
         </div>
       </div>
-      {!selected.length ? (
+      {!rows.length ? (
         <div className="empty-cart">
           <ShoppingBag aria-hidden="true" />
           <strong>Tu carrito está vacío</strong>
@@ -42,26 +44,22 @@ export function CartSummary({
         </div>
       ) : (
         <div className="summary-lines" aria-live="polite">
-          {selected.map((product) => (
-            <div className="summary-product" key={product.id}>
+          {rows.map(({ line, product }) => (
+            <div className="summary-product" key={line.key}>
               <img src={product.image_url} alt="" />
               <div>
                 <strong>{product.name}</strong>
                 <span>
-                  {quantities[product.id]} × {formatMoney(product.effective_price)}
+                  {line.quantity} × {formatMoney(product.effective_price)}
                 </span>
-                <span className="summary-pack">
-                  {packSizeLabel(packSizes[product.id] ?? DEFAULT_PACK_SIZE)}
-                </span>
+                <span className="summary-pack">{packSizeLabel(line.packSize)}</span>
               </div>
               <div className="summary-product-total">
-                <strong>
-                  {formatMoney(product.effective_price * (quantities[product.id] ?? 0))}
-                </strong>
+                <strong>{formatMoney(product.effective_price * line.quantity)}</strong>
                 <button
                   type="button"
-                  onClick={() => onRemove(product.id)}
-                  aria-label={`Quitar ${product.name}`}
+                  onClick={() => onRemoveLine(line.key)}
+                  aria-label={`Quitar ${product.name} de ${packSizeLabel(line.packSize)}`}
                 >
                   <Trash2 aria-hidden="true" />
                 </button>
@@ -89,10 +87,10 @@ export function CartSummary({
         </div>
       </div>
       <a
-        className={selected.length ? 'summary-continue' : 'summary-continue disabled'}
-        href={selected.length ? '#datos-entrega' : '#catalogo'}
+        className={rows.length ? 'summary-continue' : 'summary-continue disabled'}
+        href={rows.length ? '#datos-entrega' : '#catalogo'}
       >
-        {selected.length ? 'Completar datos' : 'Elegir productos'} <ArrowRight aria-hidden="true" />
+        {rows.length ? 'Completar datos' : 'Elegir productos'} <ArrowRight aria-hidden="true" />
       </a>
       <p className="summary-security">
         <LockKeyhole aria-hidden="true" /> Tu pedido se guarda antes de abrir WhatsApp.

@@ -1,71 +1,67 @@
-import { Search } from 'lucide-react';
 import { DEFAULT_PACK_SIZE, type PackSize } from '../../domain/packs';
-import type { Product } from '../../types/domain';
+import type { CartLine, Product } from '../../types/domain';
 import { EmptyState } from '../ui/AsyncState';
 import { ProductCard } from './ProductCard';
 
 interface ProductGridProps {
   products: Product[];
-  quantities: Record<string, number>;
-  packSizes: Record<string, PackSize>;
-  onIncrement: (id: string) => void;
-  onDecrement: (id: string) => void;
+  /** Presentación activa por producto. */
+  selectedPack: Record<string, PackSize>;
+  /** Cantidad de la presentación activa. */
+  quantityOf: (productId: string, packSize: PackSize) => number;
+  /** Líneas ya agregadas de cada producto. */
+  linesOfProduct: (productId: string) => CartLine[];
+  onIncrement: (id: string, packSize: PackSize) => void;
+  onDecrement: (id: string, packSize: PackSize) => void;
   onPackSize: (id: string, packSize: PackSize) => void;
+  onRemoveLine: (key: string) => void;
 }
 
 export function ProductGrid({
   products,
-  quantities,
-  packSizes,
+  selectedPack,
+  quantityOf,
+  linesOfProduct,
   onIncrement,
   onDecrement,
   onPackSize,
+  onRemoveLine,
 }: ProductGridProps) {
   if (!products.length)
-    return (
-      <EmptyState title="No encontramos productos" message="Prueba otra búsqueda o categoría." />
-    );
+    return <EmptyState title="No encontramos productos" message="Prueba con otra categoría." />;
   return (
     <div className="products-grid">
-      {products.map((product) => (
-        <ProductCard
-          key={product.id}
-          product={product}
-          quantity={quantities[product.id] ?? 0}
-          packSize={packSizes[product.id] ?? DEFAULT_PACK_SIZE}
-          onIncrement={() => onIncrement(product.id)}
-          onDecrement={() => onDecrement(product.id)}
-          onPackSize={(packSize) => onPackSize(product.id, packSize)}
-        />
-      ))}
+      {products.map((product) => {
+        const packSize = selectedPack[product.id] ?? DEFAULT_PACK_SIZE;
+        return (
+          <ProductCard
+            key={product.id}
+            product={product}
+            packSize={packSize}
+            quantity={quantityOf(product.id, packSize)}
+            lines={linesOfProduct(product.id)}
+            onIncrement={() => onIncrement(product.id, packSize)}
+            onDecrement={() => onDecrement(product.id, packSize)}
+            onPackSize={(next) => onPackSize(product.id, next)}
+            onRemoveLine={onRemoveLine}
+          />
+        );
+      })}
     </div>
   );
 }
 
 export function CatalogFilters({
-  search,
-  onSearch,
   categories,
   selectedCategory,
   onCategory,
 }: {
-  search: string;
-  onSearch: (value: string) => void;
   categories: string[];
   selectedCategory: string;
   onCategory: (value: string) => void;
 }) {
   return (
     <div className="catalog-filters">
-      <label className="search-field">
-        <Search aria-hidden="true" />
-        <span className="sr-only">Buscar productos</span>
-        <input
-          value={search}
-          onChange={(event) => onSearch(event.target.value)}
-          placeholder="Busca un sabor…"
-        />
-      </label>
       <div className="category-chips" role="group" aria-label="Filtrar por categoría">
         {['Todos', ...categories].map((category) => (
           <button

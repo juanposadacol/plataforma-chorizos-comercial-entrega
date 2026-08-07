@@ -98,10 +98,10 @@ insert into public.customers(
   id,full_name,phone,whatsapp_phone,email,price_list_id,payment_terms,credit_limit,credit_days,
   outstanding_balance,status,classification,last_purchase_at,order_count,total_purchased,total_paid,average_ticket,notes
 ) values
-  ('40000000-0000-4000-8000-000000000001','Cliente Público Demo','573001111111','573001111111','publico@demo.invalid','21000000-0000-4000-8000-000000000001','cash',0,0,0,'active','public',null,0,0,0,0,'[DEMO] Cliente público'),
-  ('40000000-0000-4000-8000-000000000002','Mayorista Demo','573002222222','573002222222','mayorista@demo.invalid','21000000-0000-4000-8000-000000000003','credit',1000000,15,17000,'active','wholesale',now()-interval '2 days',1,32000,20000,32000,'[DEMO] Cliente mayorista'),
-  ('40000000-0000-4000-8000-000000000003','Distribuidor Demo','573003333333','573003333333','distribuidor@demo.invalid','21000000-0000-4000-8000-000000000004','credit',3000000,30,0,'active','distributor',null,0,0,0,0,'[DEMO] Cliente distribuidor'),
-  ('40000000-0000-4000-8000-000000000004','Acuerdo Especial Demo','573004444444','573004444444','especial@demo.invalid','21000000-0000-4000-8000-000000000001','cash',0,0,0,'active','vip',null,0,0,0,0,'[DEMO] Cliente con precio especial')
+  ('40000000-0000-4000-8000-000000000001','Cliente Público Demo','3001111111','3001111111','publico@demo.invalid','21000000-0000-4000-8000-000000000001','cash',0,0,0,'active','public',null,0,0,0,0,'[DEMO] Cliente público'),
+  ('40000000-0000-4000-8000-000000000002','Mayorista Demo','3002222222','3002222222','mayorista@demo.invalid','21000000-0000-4000-8000-000000000003','credit',1000000,15,17000,'active','wholesale',now()-interval '2 days',1,32000,20000,32000,'[DEMO] Cliente mayorista'),
+  ('40000000-0000-4000-8000-000000000003','Distribuidor Demo','3003333333','3003333333','distribuidor@demo.invalid','21000000-0000-4000-8000-000000000004','credit',3000000,30,0,'active','distributor',null,0,0,0,0,'[DEMO] Cliente distribuidor'),
+  ('40000000-0000-4000-8000-000000000004','Acuerdo Especial Demo','3004444444','3004444444','especial@demo.invalid','21000000-0000-4000-8000-000000000001','cash',0,0,0,'active','vip',null,0,0,0,0,'[DEMO] Cliente con precio especial')
 on conflict (id) do nothing;
 
 insert into public.customer_addresses(id,customer_id,label,address_line,neighborhood,municipality,is_primary) values
@@ -167,8 +167,8 @@ insert into public.orders(
   requested_delivery_date,channel,status,payment_status,subtotal_amount,discount_amount,delivery_amount,tax_amount,total_amount,
   amount_paid,sales_cost,gross_profit,customer_notes,created_by,delivered_by,delivered_at,created_at
 ) values
-  ('60000000-0000-4000-8000-000000000001','PED-DEMO-0001','60000000-0000-4000-8000-000000000011','40000000-0000-4000-8000-000000000004','Acuerdo Especial Demo','573004444444','41000000-0000-4000-8000-000000000003','Calle 15 # 12-05','La Aurora','Pasto','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1','Domicilio','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1','Efectivo',current_date+1,'web','new','pending',29600,0,5000,0,34600,0,22000,7600,'[DEMO] Sin cebolla','10000000-0000-4000-8000-000000000010',null,null,now()-interval '1 hour'),
-  ('60000000-0000-4000-8000-000000000002','PED-DEMO-0002','60000000-0000-4000-8000-000000000012','40000000-0000-4000-8000-000000000002','Mayorista Demo','573002222222','41000000-0000-4000-8000-000000000002','Carrera 5 # 8-20','Industrial','Pasto','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1','Domicilio','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa4','Crédito',current_date-2,'phone','delivered','partial',32000,0,5000,0,37000,20000,22400,9600,'[DEMO] Entregado','10000000-0000-4000-8000-000000000010','10000000-0000-4000-8000-000000000010',now()-interval '2 days',now()-interval '3 days')
+  ('60000000-0000-4000-8000-000000000001','PED-DEMO-0001','60000000-0000-4000-8000-000000000011','40000000-0000-4000-8000-000000000004','Acuerdo Especial Demo','3004444444','41000000-0000-4000-8000-000000000003','Calle 15 # 12-05','La Aurora','Pasto','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1','Domicilio','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1','Efectivo',current_date+1,'web','new','pending',29600,0,5000,0,34600,0,22000,7600,'[DEMO] Sin cebolla','10000000-0000-4000-8000-000000000010',null,null,now()-interval '1 hour'),
+  ('60000000-0000-4000-8000-000000000002','PED-DEMO-0002','60000000-0000-4000-8000-000000000012','40000000-0000-4000-8000-000000000002','Mayorista Demo','3002222222','41000000-0000-4000-8000-000000000002','Carrera 5 # 8-20','Industrial','Pasto','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1','Domicilio','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa4','Crédito',current_date-2,'phone','delivered','partial',32000,0,5000,0,37000,20000,22400,9600,'[DEMO] Entregado','10000000-0000-4000-8000-000000000010','10000000-0000-4000-8000-000000000010',now()-interval '2 days',now()-interval '3 days')
 on conflict (id) do nothing;
 
 insert into public.order_items(

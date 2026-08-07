@@ -12,7 +12,7 @@ import { CartSummary } from '../components/store/CartSummary';
 import { ErrorState, LoadingState } from '../components/ui/AsyncState';
 import { useAuth } from '../features/auth/AuthContext';
 import { useCart } from '../features/cart/CartContext';
-import { buildPackNote, DEFAULT_PACK_SIZE } from '../domain/packs';
+import { buildPackNote, mergeLinesByProduct } from '../domain/packs';
 import { getCatalog, getCheckoutOptions, getPublicSettings } from '../features/catalog/catalogApi';
 import type { CheckoutFormValues } from '../features/orders/checkoutSchema';
 import { saveLocalProfile } from '../features/orders/customerProfile';
@@ -25,9 +25,18 @@ export function StorefrontPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const { quantities, packSizes, units, increment, decrement, setPackSize, setQuantity, clear } =
-    useCart();
-  const [search, setSearch] = useState('');
+  const {
+    lines,
+    selectedPack,
+    units,
+    quantityOf,
+    linesOfProduct,
+    increment,
+    decrement,
+    selectPackSize,
+    removeLine,
+    clear,
+  } = useCart();
   const [category, setCategory] = useState('Todos');
   const [loginOpen, setLoginOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -41,24 +50,23 @@ export function StorefrontPage() {
     () => [...new Set(products.map((item) => item.category_name).filter(Boolean))],
     [products],
   );
-  const filtered = useMemo(() => {
-    const needle = search.trim().toLocaleLowerCase('es');
-    return products.filter(
-      (item) =>
-        (category === 'Todos' || item.category_name === category) &&
-        (!needle ||
-          `${item.name} ${item.short_description}`.toLocaleLowerCase('es').includes(needle)),
-    );
-  }, [products, search, category]);
-  const estimatedTotal = products.reduce(
-    (sum, product) => sum + (quantities[product.id] ?? 0) * product.effective_price,
+  const filtered = useMemo(
+    () => products.filter((item) => category === 'Todos' || item.category_name === category),
+    [products, category],
+  );
+  const priceById = useMemo(
+    () => new Map(products.map((product) => [product.id, product.effective_price])),
+    [products],
+  );
+  const estimatedTotal = lines.reduce(
+    (sum, line) => sum + line.quantity * (priceById.get(line.productId) ?? 0),
     0,
   );
 
   const submit = async (values: CheckoutFormValues) => {
-    const items = Object.entries(quantities)
-      .filter(([, quantity]) => quantity > 0)
-      .map(([product_id, quantity]) => ({ product_id, quantity }));
+    // Una línea por producto para el pedido: precio e inventario son por
+    // producto, aunque el carrito separe las presentaciones.
+    const items = mergeLinesByProduct(lines);
     if (!items.length) {
       setSubmitError('Agrega al menos un producto.');
       return;
@@ -66,10 +74,10 @@ export function StorefrontPage() {
     // La presentación (3, 4, 6 o 10 unidades) no cambia precio ni inventario:
     // viaja con el pedido para que el negocio sepa cómo empacar cada línea.
     const packNote = buildPackNote(
-      items.map((item) => ({
-        name: products.find((product) => product.id === item.product_id)?.name ?? 'Producto',
-        quantity: item.quantity,
-        packSize: packSizes[item.product_id] ?? DEFAULT_PACK_SIZE,
+      lines.map((line) => ({
+        name: products.find((product) => product.id === line.productId)?.name ?? 'Producto',
+        quantity: line.quantity,
+        packSize: line.packSize,
       })),
     );
     const notes = [packNote, values.notes.trim()].filter(Boolean).join('\n').slice(0, 1000);
@@ -170,19 +178,19 @@ export function StorefrontPage() {
           ) : (
             <>
               <CatalogFilters
-                search={search}
-                onSearch={setSearch}
                 categories={categories}
                 selectedCategory={category}
                 onCategory={setCategory}
               />
               <ProductGrid
                 products={filtered}
-                quantities={quantities}
-                packSizes={packSizes}
+                selectedPack={selectedPack}
+                quantityOf={quantityOf}
+                linesOfProduct={linesOfProduct}
                 onIncrement={increment}
                 onDecrement={decrement}
-                onPackSize={setPackSize}
+                onPackSize={selectPackSize}
+                onRemoveLine={removeLine}
               />
             </>
           )}
@@ -207,10 +215,9 @@ export function StorefrontPage() {
             />
             <CartSummary
               products={products}
-              quantities={quantities}
-              packSizes={packSizes}
+              lines={lines}
               deliveryMethod={checkoutOptions.data?.deliveryMethods[0]}
-              onRemove={(id) => setQuantity(id, 0)}
+              onRemoveLine={removeLine}
             />
           </div>
         </section>

@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(31);
+select plan(33);
 
 select is(
   (select unit_price from public.resolve_product_price_internal(
@@ -70,6 +70,17 @@ select ok(
 select is(
   (select stock_reserved from public.products where id='11111111-1111-4111-8111-111111111111'),
   3::numeric, 'crear pedido reserva inventario'
+);
+
+-- El celular llega con indicativo ("573009999991") y se guarda sin él: es la
+-- forma que el panel muestra y con la que el negocio busca.
+select is(
+  (select customer_phone from public.orders where idempotency_key='90000000-0000-4000-8000-000000000010'),
+  '3009999991', 'el pedido guarda el celular sin el indicativo 57'
+);
+select is(
+  (select phone from public.customers where public.phone_key(phone)='3009999991' and deleted_at is null),
+  '3009999991', 'el cliente creado guarda el celular sin el indicativo 57'
 );
 
 select set_config('request.jwt.claims','{"role":"authenticated","sub":"10000000-0000-4000-8000-000000000010"}',true);

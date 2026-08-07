@@ -1,17 +1,23 @@
 -- Pruebas de public.delete_order_permanently().
 -- Todo corre dentro de begin/rollback: ningún dato queda modificado.
 --
+-- Regla vigente (202608070006_delete_order_permanently_any_state.sql): un
+-- superadministrador puede eliminar un pedido en CUALQUIER estado, incluido
+-- pagado y entregado, porque la función revierte antes inventario, caja, pagos y
+-- cartera. Lo único que la detiene es un gasto contable asociado.
+--
 -- Fixtures del seed que se usan:
 --   60000000-…-0001  status 'new', payment 'pending', amount_paid 0,
 --                    1 reserva activa (qty 2, producto 1111…), 1 movimiento
---                    'reservation'  → ELEGIBLE
+--                    'reservation'
 --   60000000-…-0002  status 'delivered', payment 'partial', reserva 'fulfilled',
---                    movimiento 'sale'  → NO ELEGIBLE
+--                    movimientos 'reservation' + 'sale' (producto 2222…),
+--                    1 pago aprobado de 20.000 y su movimiento de caja
 --   10000000-…-0010  perfil con rol superadmin
 
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(31);
+select plan(39);
 
 -- ---------------------------------------------------------------------------
 -- Fixtures adicionales
@@ -53,6 +59,24 @@ update tmp_atomic set
   status='new', payment_status='pending', amount_paid=0;
 insert into public.orders select * from tmp_atomic;
 
+-- Un pedido con un gasto contable asociado: el único caso que sigue bloqueado.
+create temporary table tmp_expense as select * from public.orders where id='60000000-0000-4000-8000-000000000001';
+update tmp_expense set
+  id='6f000000-0000-4000-8000-0000000000f3',
+  order_number='PED-TEST-9003',
+  idempotency_key=gen_random_uuid(),
+  tracking_token=gen_random_uuid(),
+  status='new', payment_status='pending', amount_paid=0;
+insert into public.orders select * from tmp_expense;
+
+insert into public.expenses(
+  id,expense_date,category_id,description,amount,status,order_id,created_by
+) values (
+  '6f400000-0000-4000-8000-0000000000f1',current_date,'70000000-0000-4000-8000-000000000001',
+  'Domicilio del pedido de prueba',9000,'draft','6f000000-0000-4000-8000-0000000000f3',
+  '10000000-0000-4000-8000-000000000010'
+);
+
 insert into public.order_items(
   id,order_id,product_id,sku,product_name,unit,quantity,unit_price,public_unit_price,
   subtotal_amount,discount_amount,total_amount,unit_cost,total_cost,gross_profit,price_source
@@ -70,6 +94,32 @@ values
    '6f100000-0000-4000-8000-0000000000f1','11111111-1111-4111-8111-111111111111',1,'active'),
   ('6f200000-0000-4000-8000-0000000000f2','6f000000-0000-4000-8000-0000000000f2',
    '6f100000-0000-4000-8000-0000000000f2','22222222-2222-4222-8222-222222222222',1,'active');
+
+-- Cada reserva deja su movimiento en el kardex, igual que lo hace create_order:
+-- de ahí sale el efecto que la eliminación tiene que revertir.
+insert into public.inventory_movements(
+  id,product_id,movement_type,quantity,unit_cost,
+  stock_on_hand_before,stock_on_hand_after,stock_reserved_before,stock_reserved_after,
+  order_id,order_item_id,reservation_id,performed_by,notes
+)
+select '6f300000-0000-4000-8000-0000000000f1',p.id,'reservation',1,11000,
+       p.stock_on_hand,p.stock_on_hand,p.stock_reserved,p.stock_reserved+1,
+       '6f000000-0000-4000-8000-0000000000f2','6f100000-0000-4000-8000-0000000000f1',
+       '6f200000-0000-4000-8000-0000000000f1','10000000-0000-4000-8000-000000000010',
+       'Reserva de prueba'
+from public.products p where p.id='11111111-1111-4111-8111-111111111111';
+
+insert into public.inventory_movements(
+  id,product_id,movement_type,quantity,unit_cost,
+  stock_on_hand_before,stock_on_hand_after,stock_reserved_before,stock_reserved_after,
+  order_id,order_item_id,reservation_id,performed_by,notes
+)
+select '6f300000-0000-4000-8000-0000000000f2',p.id,'reservation',1,11200,
+       p.stock_on_hand,p.stock_on_hand,p.stock_reserved,p.stock_reserved+1,
+       '6f000000-0000-4000-8000-0000000000f2','6f100000-0000-4000-8000-0000000000f2',
+       '6f200000-0000-4000-8000-0000000000f2','10000000-0000-4000-8000-000000000010',
+       'Reserva de prueba'
+from public.products p where p.id='22222222-2222-4222-8222-222222222222';
 
 -- Estado previo, para comparar después.
 create temporary table t_before as
@@ -134,18 +184,21 @@ select throws_ok(
   '6b. una confirmación nula falla'
 );
 
--- 4. Un pedido Entregado no puede eliminarse.
-select throws_ok(
-  $$select public.delete_order_permanently('60000000-0000-4000-8000-000000000002','PED-DEMO-0002')$$,
-  '22023','STATUS_NOT_ELIGIBLE: Solo se pueden eliminar pedidos en estado Nuevo o Por confirmar',
-  '4. un pedido Entregado no puede eliminarse'
-);
+-- 4/5. Entregado y pagado YA NO son motivo de rechazo.
+select ok(public.order_is_purgeable('60000000-0000-4000-8000-000000000001'),
+  '4a. order_is_purgeable acepta el pedido Nuevo sin pago');
+select ok(public.order_is_purgeable('60000000-0000-4000-8000-000000000002'),
+  '4b. order_is_purgeable acepta un pedido Entregado con pago parcial');
+select ok(public.order_is_purgeable('6f000000-0000-4000-8000-0000000000f1'),
+  '5. order_is_purgeable acepta un pedido con saldo pagado');
 
--- 5. Un pedido con pago no puede eliminarse.
+-- El gasto contable sigue bloqueando.
+select ok(not public.order_is_purgeable('6f000000-0000-4000-8000-0000000000f3'),
+  'order_is_purgeable rechaza un pedido con gasto contable asociado');
 select throws_ok(
-  $$select public.delete_order_permanently('6f000000-0000-4000-8000-0000000000f1','PED-TEST-9001')$$,
-  '22023','ORDER_HAS_PAYMENT: El pedido tiene pagos aplicados y no puede eliminarse',
-  '5. un pedido Nuevo con pago aplicado no puede eliminarse'
+  $$select public.delete_order_permanently('6f000000-0000-4000-8000-0000000000f3','PED-TEST-9003')$$,
+  '22023','ORDER_HAS_EXPENSE: El pedido tiene un gasto contable asociado; elimínalo primero desde Gastos',
+  'un pedido con gasto contable no se elimina y explica por qué'
 );
 
 -- Un pedido inexistente.
@@ -155,20 +208,12 @@ select throws_ok(
   'un pedido inexistente devuelve ORDER_NOT_FOUND'
 );
 
--- Elegibilidad declarativa.
-select ok(public.order_is_purgeable('60000000-0000-4000-8000-000000000001'),
-  'order_is_purgeable acepta el pedido Nuevo sin pago');
-select ok(not public.order_is_purgeable('60000000-0000-4000-8000-000000000002'),
-  'order_is_purgeable rechaza el pedido Entregado');
-select ok(not public.order_is_purgeable('6f000000-0000-4000-8000-0000000000f1'),
-  'order_is_purgeable rechaza el pedido con pago');
-
 -- ---------------------------------------------------------------------------
--- 10. Atomicidad: fallo a mitad de la liberación de inventario
+-- 10. Atomicidad: fallo a mitad de la reversión de inventario
 -- ---------------------------------------------------------------------------
 
 -- Se deja stock_reserved del segundo producto por debajo de su reserva, así que
--- la primera liberación tendrá éxito y la segunda abortará.
+-- la primera reversión tendrá éxito y la segunda abortará.
 select set_config('app.inventory_write','transactional_api',true);
 update public.products set stock_reserved = 0
 where id='22222222-2222-4222-8222-222222222222';
@@ -179,13 +224,13 @@ select (select stock_reserved from public.products where id='11111111-1111-4111-
 
 select throws_ok(
   $$select public.delete_order_permanently('6f000000-0000-4000-8000-0000000000f2','PED-TEST-9002')$$,
-  '23514','INVENTORY_NOT_REVERSIBLE: Reserva de inventario inconsistente',
-  '10a. una liberación inconsistente aborta la operación'
+  '23514','INVENTORY_NOT_REVERSIBLE: Revertir el pedido dejaría el inventario en negativo',
+  '10a. una reversión inconsistente aborta la operación'
 );
 select is(
   (select stock_reserved from public.products where id='11111111-1111-4111-8111-111111111111'),
   (select reserved_1111 from t_atomic),
-  '10b. la liberación ya aplicada se revierte por completo (rollback atómico)'
+  '10b. la reversión ya aplicada se revierte por completo (rollback atómico)'
 );
 select ok(
   exists (select 1 from public.orders where id='6f000000-0000-4000-8000-0000000000f2'),
@@ -198,7 +243,7 @@ select is(
 );
 
 -- ---------------------------------------------------------------------------
--- 1. Eliminación exitosa
+-- 1. Eliminación exitosa de un pedido nuevo
 -- ---------------------------------------------------------------------------
 
 select lives_ok(
@@ -262,6 +307,56 @@ select ok(
 select ok(
   (select nextval('public.order_number_seq')) > (select seq_value from t_before),
   '13. el consecutivo avanza; el número eliminado no se reutiliza'
+);
+
+-- ---------------------------------------------------------------------------
+-- 14. Caso reportado: eliminar un pedido ENTREGADO y PAGADO
+-- ---------------------------------------------------------------------------
+
+create temporary table t_delivered as
+select
+  (select stock_on_hand from public.products where id='22222222-2222-4222-8222-222222222222') as on_hand_2222,
+  (select stock_reserved from public.products where id='22222222-2222-4222-8222-222222222222') as reserved_2222,
+  (select current_balance from public.cash_accounts where id='72000000-0000-4000-8000-000000000001') as caja,
+  (select total_paid from public.customers where id='40000000-0000-4000-8000-000000000002') as total_paid;
+
+select lives_ok(
+  $$select public.delete_order_permanently('60000000-0000-4000-8000-000000000002','PED-DEMO-0002')$$,
+  '14a. un pedido Entregado con pago aplicado sí se elimina'
+);
+select ok(
+  not exists (select 1 from public.orders where id='60000000-0000-4000-8000-000000000002'),
+  '14b. el pedido entregado desaparece de la tabla de pedidos'
+);
+select is(
+  (select stock_on_hand from public.products where id='22222222-2222-4222-8222-222222222222'),
+  (select on_hand_2222 + 2 from t_delivered),
+  '14c. las 2 unidades vendidas vuelven a la existencia física'
+);
+select is(
+  (select stock_reserved from public.products where id='22222222-2222-4222-8222-222222222222'),
+  (select reserved_2222 from t_delivered),
+  '14d. lo reservado no cambia: la reserva ya se había convertido en venta'
+);
+select is(
+  (select count(*) from public.payments where order_id='60000000-0000-4000-8000-000000000002'),
+  0::bigint,
+  '14e. se eliminó el pago del pedido'
+);
+select is(
+  (select count(*) from public.cash_movements where order_id='60000000-0000-4000-8000-000000000002'),
+  0::bigint,
+  '14f. se eliminó el movimiento de caja del pago'
+);
+select is(
+  (select current_balance from public.cash_accounts where id='72000000-0000-4000-8000-000000000001'),
+  (select caja - 20000 from t_delivered),
+  '14g. la caja descuenta exactamente lo que ese pago había sumado'
+);
+select is(
+  (select total_paid from public.customers where id='40000000-0000-4000-8000-000000000002'),
+  (select total_paid - 20000 from t_delivered),
+  '14h. lo pagado por el cliente se recalcula sin ese pedido'
 );
 
 select * from finish();

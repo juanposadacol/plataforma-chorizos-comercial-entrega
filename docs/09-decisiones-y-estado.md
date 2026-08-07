@@ -14,7 +14,7 @@ Se conservaron paleta, estética artesanal, fotografías, tarjetas, cantidades, 
 
 ### D-02. Supabase como fuente autoritativa
 
-PostgreSQL conserva clientes, catálogo, reglas de precio, pedidos, snapshots, inventario, finanzas, notificaciones y auditoría. `localStorage` solo conserva `{productId, quantity}` del carrito y la sesión es administrada por Supabase Auth.
+PostgreSQL conserva clientes, catálogo, reglas de precio, pedidos, snapshots, inventario, finanzas, notificaciones y auditoría. `localStorage` solo conserva `{productId, packSize, quantity}` por línea del carrito y la sesión es administrada por Supabase Auth.
 
 **Consecuencia:** borrar almacenamiento local no elimina pedidos; una captura del navegador no reemplaza la base de datos.
 
@@ -65,6 +65,13 @@ React protege rutas y adapta la interfaz, pero PostgreSQL aplica el límite real
 Pedidos, pagos, compras, gastos, kardex, caja e historial no se borran físicamente en la operación normal. Se usan estados, desactivación, reversión o movimientos compensatorios.
 
 **Consecuencia:** las correcciones requieren motivo y trazabilidad; el negocio debe definir su política de retención.
+
+**Excepciones deliberadas, con compuerta explícita y local a la transacción:**
+
+- `delete_order_permanently` (superadmin, confirmando el consecutivo) elimina un pedido en cualquier estado, incluido pagado o entregado. Antes de borrar revierte el inventario que el pedido movió, descuenta de caja lo que sus pagos habían sumado, elimina cartera y pagos y **recalcula** los agregados del cliente. Lo rechaza un gasto contable asociado, que es un documento propio de contabilidad.
+- `update_inventory_adjustment` / `delete_inventory_adjustment` (superadmin o admin) corrigen o eliminan un **ajuste manual** de inventario, recalculan el stock y recolocan los saldos posteriores del kardex. Los movimientos originados en un pedido o una compra siguen siendo intocables.
+
+Ambas dejan huella en la auditoría: la purga de pedido, una entrada técnica sin contenido comercial; la corrección de kardex, el antes y el después completos.
 
 ### D-11. COP y America/Bogota
 

@@ -1,7 +1,7 @@
-import { BadgeCheck, CircleCheck, Package } from 'lucide-react';
-import { basePresentation, type PackSize } from '../../domain/packs';
+import { BadgeCheck, CircleCheck, Package, Trash2 } from 'lucide-react';
+import { basePresentation, packSizeLabel, type PackSize } from '../../domain/packs';
 import { formatMoney } from '../../lib/format';
-import type { Product } from '../../types/domain';
+import type { CartLine, Product } from '../../types/domain';
 import { PackSizeSelector } from './PackSizeSelector';
 import { QuantitySelector } from './QuantitySelector';
 
@@ -9,19 +9,30 @@ export function ProductCard({
   product,
   quantity,
   packSize,
+  lines,
   onIncrement,
   onDecrement,
   onPackSize,
+  onRemoveLine,
 }: {
   product: Product;
+  /** Paquetes de la presentación seleccionada en esta tarjeta. */
   quantity: number;
   packSize: PackSize;
+  /** Todas las presentaciones de este producto que ya están en el carrito. */
+  lines: CartLine[];
   onIncrement: () => void;
   onDecrement: () => void;
   onPackSize: (packSize: PackSize) => void;
+  onRemoveLine: (key: string) => void;
 }) {
   const available = product.allow_backorder || product.stock_available > 0;
   const presentation = basePresentation(product.presentation);
+  const unitsInCart = lines.reduce((sum, line) => sum + line.quantity, 0);
+  // El tope es por producto: las presentaciones comparten el mismo inventario.
+  const maximum = product.allow_backorder
+    ? 999
+    : Math.max(quantity, product.stock_available - (unitsInCart - quantity));
   return (
     <article className="product-card">
       <div className="product-image-wrap">
@@ -64,12 +75,31 @@ export function ProductCard({
               onChange={onPackSize}
             />
             <QuantitySelector
-              name={product.name}
+              name={`${product.name} de ${packSizeLabel(packSize)}`}
               value={quantity}
-              maximum={product.allow_backorder ? 999 : product.stock_available}
+              maximum={maximum}
               onIncrement={onIncrement}
               onDecrement={onDecrement}
             />
+            {lines.length > 0 && (
+              <ul className="product-cart-lines" aria-label={`${product.name} en el carrito`}>
+                {lines.map((line) => (
+                  <li key={line.key} className={line.packSize === packSize ? 'active' : undefined}>
+                    <span>
+                      {line.quantity} × {packSizeLabel(line.packSize)}
+                    </span>
+                    <strong>{formatMoney(product.effective_price * line.quantity)}</strong>
+                    <button
+                      type="button"
+                      onClick={() => onRemoveLine(line.key)}
+                      aria-label={`Quitar ${product.name} de ${packSizeLabel(line.packSize)}`}
+                    >
+                      <Trash2 aria-hidden="true" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </>
         ) : (
           <p className="out-of-stock">Este producto no está disponible por ahora.</p>

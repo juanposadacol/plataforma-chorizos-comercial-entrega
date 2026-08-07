@@ -9,7 +9,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { normalizeColombianPhone } from '../../lib/format';
+import { toColombianE164 } from '../../lib/format';
 import { supabase } from '../../lib/supabase';
 import type { StaffAccess } from '../../types/domain';
 
@@ -73,16 +73,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const sendOtp = useCallback(async (phone: string) => {
     if (!supabase) throw new Error('Supabase no está configurado.');
-    const { error } = await supabase.auth.signInWithOtp({
-      phone: `+${normalizeColombianPhone(phone)}`,
-    });
+    // El SMS se marca con indicativo; el celular se guarda sin él.
+    const { error } = await supabase.auth.signInWithOtp({ phone: toColombianE164(phone) });
     if (error) throw error;
   }, []);
 
   const verifyOtp = useCallback(async (phone: string, token: string) => {
     if (!supabase) throw new Error('Supabase no está configurado.');
     const { error } = await supabase.auth.verifyOtp({
-      phone: `+${normalizeColombianPhone(phone)}`,
+      phone: toColombianE164(phone),
       token,
       type: 'sms',
     });

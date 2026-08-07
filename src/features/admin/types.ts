@@ -177,16 +177,35 @@ export interface CustomerProductPrice extends AdminRecord {
 
 export interface InventoryMovement extends AdminRecord {
   product_id: string;
+  variant_id?: string | null;
   movement_type: string;
   quantity: number;
   unit_cost?: number;
+  /** Nombres reales de la tabla `inventory_movements`. */
+  stock_on_hand_before?: number;
+  stock_on_hand_after?: number;
+  /** @deprecated alias histórico de stock_on_hand_before */
   previous_balance?: number;
+  /** @deprecated alias histórico de stock_on_hand_after */
   new_balance?: number;
   order_id?: string | null;
   purchase_id?: string | null;
   notes?: string | null;
   created_at: string;
 }
+
+/** Movimientos que nacen de un ajuste manual y por eso se pueden corregir o eliminar. */
+export const EDITABLE_MOVEMENT_TYPES = [
+  'positive_adjustment',
+  'negative_adjustment',
+  'damage',
+  'loss',
+] as const;
+
+export const isEditableMovement = (movement: InventoryMovement): boolean =>
+  (EDITABLE_MOVEMENT_TYPES as readonly string[]).includes(movement.movement_type) &&
+  !movement.order_id &&
+  !movement.purchase_id;
 
 export interface Supplier extends AdminRecord {
   name: string;

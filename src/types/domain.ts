@@ -34,6 +34,18 @@ export interface CartItem {
   packSize?: PackSize;
 }
 
+/**
+ * Línea del carrito ya resuelta: un producto en UNA presentación. El mismo
+ * producto puede aparecer en varias líneas, una por presentación.
+ */
+export interface CartLine {
+  /** `productId::packSize`, estable mientras la línea exista. */
+  key: string;
+  productId: UUID;
+  packSize: PackSize;
+  quantity: number;
+}
+
 export interface CheckoutValues {
   customerName: string;
   customerPhone: string;
