@@ -116,6 +116,8 @@ El comprador no puede asignarse su propia lista. Antes de cambiarla, confirme el
 
 El detalle de cliente muestra historial de pedidos, métricas de compra, saldo y precios especiales. Desde allí puede iniciar un pedido o abrir la configuración de un precio especial.
 
+La columna **Ubicación** se llena sola: al crear un pedido, la dirección escrita en el checkout queda guardada en la libreta del cliente. Si el cliente pide desde otra dirección, la nueva se agrega y la primera sigue siendo la principal; el autocompletado usa la principal.
+
 El acceso normal de clientes usa OTP de Supabase. Si la instalación conserva un hash de PIN por compatibilidad, **Restablecer PIN** lo invalida y limpia los intentos/bloqueo; no genera una contraseña recuperable. Oriente al cliente a usar OTP. El hash no se expone por la API.
 
 Para retirar un cliente de la operación, use desactivación. No elimine físicamente registros vinculados a pedidos o saldos.
