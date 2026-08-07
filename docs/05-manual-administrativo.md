@@ -98,7 +98,7 @@ Las transiciones dependen del rol: ventas atiende etapas comerciales iniciales y
 
 Use **Crear pedido desde la tienda** y complete el checkout con los datos entregados por el cliente. El celular va primero: al escribirlo completo, el personal ve cargarse solos el nombre y la dirección si el cliente ya existe. Revíselos con el cliente antes de confirmar, porque pueden estar desactualizados.
 
-Esa búsqueda por celular exige rol de personal. En la tienda pública no está disponible a propósito: si cualquiera pudiera escribir un número y obtener el nombre y la dirección de casa de esa persona, la plataforma se volvería un directorio de datos personales consultable por número, con la responsabilidad legal que eso implica para el negocio. El comprador que entra por su cuenta autocompleta con lo que quedó guardado en su propio dispositivo o iniciando sesión con su celular.
+La búsqueda por celular también funciona para el comprador que entra a la tienda por su cuenta, sin sesión. Devuelve solo nombre y dirección de entrega: documento, correo, saldo, cupo, lista de precios e historial nunca salen del panel.
 
 Aunque lo haga un empleado, no invente precios en el navegador: el servidor resolverá la condición comercial asociada al cliente.
 

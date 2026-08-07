@@ -79,13 +79,11 @@ export const fetchSessionProfile = async (phone: string): Promise<CustomerProfil
 };
 
 /**
- * Búsqueda por celular reservada al personal, para cuando el negocio toma el
- * pedido por teléfono o WhatsApp. El servidor exige rol de personal: si lo
- * llamara un comprador anónimo responde "permisos insuficientes", justamente
- * para que la tienda pública no se vuelva un directorio de nombres y
- * direcciones consultable por número.
+ * Busca en el servidor el cliente dueño de ese celular. Solo devuelve nombre y
+ * dirección de entrega: el resto de la ficha (documento, correo, saldo, cupo,
+ * lista de precios) no sale del panel.
  */
-export const fetchStaffLookup = async (phone: string): Promise<CustomerProfile | null> => {
+export const fetchPhoneLookup = async (phone: string): Promise<CustomerProfile | null> => {
   if (!supabase) return null;
   const { data, error } = await supabase.rpc('lookup_customer_for_order', { p_phone: phone });
   if (error || !data) return null;
@@ -99,19 +97,16 @@ export const fetchStaffLookup = async (phone: string): Promise<CustomerProfile |
   };
 };
 
-/** Personal y sesión propia consultan el servidor; el resto, la memoria del dispositivo. */
+/** El servidor manda; la memoria del dispositivo es el respaldo si no responde. */
 export const loadCustomerProfile = async (
   phone: string,
   hasSession: boolean,
-  isStaff = false,
 ): Promise<CustomerProfile | null> => {
-  if (isStaff) {
-    try {
-      const profile = await fetchStaffLookup(phone);
-      if (profile) return profile;
-    } catch {
-      // Sin datos del servidor se sigue con lo guardado localmente.
-    }
+  try {
+    const profile = await fetchPhoneLookup(phone);
+    if (profile) return profile;
+  } catch {
+    // Sin datos del servidor se sigue con lo guardado localmente.
   }
   if (hasSession) {
     try {

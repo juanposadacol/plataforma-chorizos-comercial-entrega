@@ -9,7 +9,7 @@ La tienda permite comprar como visitante o iniciar sesión con un código SMS. E
 3. Revise fotografía, presentación, precio mostrado y disponibilidad (**Disponible** o **Agotado**; la tienda no muestra las cantidades en inventario).
 4. Elija la presentación del paquete: **3, 4, 6 o 10 unidades**. Las cuatro versiones tienen el mismo precio y la selección viaja con el pedido para que el negocio sepa cómo empacarlo.
 5. Use `+` y `−` para elegir cantidades. El resumen se actualiza automáticamente.
-6. Complete, empezando por el celular. Si ya compró antes en ese mismo dispositivo —o si inició sesión con su celular— el nombre y la dirección se cargan solos y solo tiene que revisarlos:
+6. Complete, empezando por el celular. Si ya compró antes, el nombre y la dirección se cargan solos y solo tiene que revisarlos:
    - celular colombiano;
    - nombre completo;
    - dirección o punto de encuentro;
