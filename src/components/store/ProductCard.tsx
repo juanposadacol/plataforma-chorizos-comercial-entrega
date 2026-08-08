@@ -27,6 +27,9 @@ export function ProductCard({
   onRemoveLine: (key: string) => void;
 }) {
   const available = product.allow_backorder || product.stock_available > 0;
+  // 'special', 'volume' o 'list': el servidor resolvió un precio propio de este
+  // comprador, distinto del público.
+  const agreedPrice = Boolean(product.price_source && product.price_source !== 'public');
   const presentation = basePresentation(product.presentation);
   const unitsInCart = lines.reduce((sum, line) => sum + line.quantity, 0);
   // El tope es por producto: las presentaciones comparten el mismo inventario.
@@ -55,7 +58,18 @@ export function ProductCard({
             <p className="product-category">{product.category_name}</p>
             <h3>{product.name}</h3>
           </div>
-          <strong className="price">{formatMoney(product.effective_price)}</strong>
+          <div className="price-block">
+            <strong className="price">{formatMoney(product.effective_price)}</strong>
+            {/* El precio acordado se ve aquí, no al final de la compra. */}
+            {agreedPrice && (
+              <span className="price-tag">
+                Tu precio
+                {product.public_price > product.effective_price && (
+                  <em>antes {formatMoney(product.public_price)}</em>
+                )}
+              </span>
+            )}
+          </div>
         </div>
         <p className="product-description">{product.short_description}</p>
         <div className="product-meta">

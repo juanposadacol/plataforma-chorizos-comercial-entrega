@@ -194,6 +194,8 @@ Para un ajuste:
 4. registre un motivo específico;
 5. confirme y revise el movimiento resultante.
 
+El **inventario inicial** de un producto se corrige y se elimina igual que un ajuste: es un dato digitado y equivocarse ahí no puede ser irreversible.
+
 Para corregir o eliminar un ajuste mal registrado, use los botones de la columna **Acciones** del kardex:
 
 - **Editar** permite cambiar tipo, cantidad, costo y motivo del ajuste. El producto no se cambia: si se equivocó de referencia, elimine el movimiento y regístrelo de nuevo.
@@ -201,27 +203,27 @@ Para corregir o eliminar un ajuste mal registrado, use los botones de la columna
 
 En ambos casos el servidor recalcula el stock del producto y recoloca los saldos de los movimientos posteriores, así que la última fila del kardex sigue coincidiendo con la existencia real. Las dos acciones exigen rol **superadministrador** o **administrador** y quedan en la auditoría con su antes y su después.
 
-Solo se pueden corregir los ajustes **manuales** (ajuste positivo, ajuste negativo, daño y pérdida). Los movimientos que nacen de un pedido o de una compra aparecen como **Automático** y se corrigen operando ese pedido o esa compra.
+Solo se pueden corregir los movimientos **digitados a mano**: inventario inicial, ajuste positivo, ajuste negativo, daño y pérdida. Los que nacen de un pedido —reserva, liberación, venta, devolución— aparecen como **Automático** y se corrigen operando ese pedido: si quiere que desaparezca la reserva, cancele o elimine el pedido que la creó.
 
 Nunca edite `stock_on_hand` o `stock_reserved` directamente. Las funciones transaccionales bloquean filas, protegen reservas y registran saldo anterior y posterior. Una discrepancia física debe documentarse como movimiento, no ocultarse.
 
-## 10. Proveedores y compras
+## 10. Proveedores y compras de carne
 
 Primero cree el proveedor en `/admin/proveedores`, incluyendo NIT, contacto y condiciones de pago.
 
-En `/admin/compras`:
+El negocio no compra chorizos terminados: compra **carne**. Por eso la compra no tiene líneas por producto, ni descuento, ni impuesto. En `/admin/compras`:
 
-1. cree la compra y seleccione proveedor;
-2. agregue productos con la **cantidad** recibida y el **valor pagado** por esa línea; el sistema calcula el **costo unitario** (valor pagado ÷ cantidad) y lo muestra en la línea;
-3. registre factura, fechas, descuentos, impuestos y el abono al proveedor;
-4. guarde la compra;
-5. use **Recibir** solo al comprobar físicamente la mercancía.
+1. seleccione proveedor y fecha, y escriba el número de factura si lo hay;
+2. registre **cuántos kilos de carne** compró, **cuánto pagó** y **cuántos chorizos** salieron de esa carne;
+3. revise el **costo por chorizo** que aparece calculado (valor pagado ÷ chorizos obtenidos);
+4. registre el abono al proveedor y el vencimiento si quedó saldo;
+5. guarde.
 
-Ese costo unitario es el que alimenta el costo promedio del inventario y el promedio semanal con el que se calcula la utilidad, así que debe corresponder a lo realmente pagado esa semana.
+Ejemplo: 300 kg por $3.000.000 que rinden 630 chorizos ⇒ $4.761,90 por chorizo.
 
-La recepción transaccional incrementa existencias, crea movimientos, recalcula el costo promedio ponderado y, si queda saldo, crea la cuenta por pagar. Repetir una recepción ya completada no debe duplicar existencias.
+Al guardar, ese costo por chorizo queda como costo actual y promedio de **todos los productos activos**, y con él se valora cada línea vendida y se calcula la utilidad. No importa el sabor: el rendimiento es común a la producción de esa carne.
 
-No use ajustes positivos para reemplazar una compra que deba quedar asociada a proveedor y factura.
+La compra **no cambia las existencias**: repartir el rendimiento entre los sabores sería inventar un dato. El stock de cada chorizo se sigue registrando en Inventario, que es donde el negocio cuenta lo que produjo. Si queda saldo con el proveedor, se abre la cuenta por pagar igual que antes.
 
 ## 11. Pagos y cartera
 

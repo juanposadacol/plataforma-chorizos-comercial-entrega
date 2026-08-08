@@ -1,8 +1,8 @@
 import { useMemo, useState, type FormEvent } from 'react';
-import { CheckCircle2, PackageCheck, Plus, Save, Trash2 } from 'lucide-react';
-import type { AdminProduct, Purchase, Supplier } from '../../features/admin/types';
-import { insertRecord, invokeAdminRpc } from '../../features/admin/adminService';
-import { lineAmounts, purchaseTotals, round2 } from '../../features/admin/purchases/purchaseMath';
+import { CheckCircle2, Plus, Save } from 'lucide-react';
+import type { Purchase, Supplier } from '../../features/admin/types';
+import { invokeAdminRpc } from '../../features/admin/adminService';
+import { round2 } from '../../features/admin/purchases/purchaseMath';
 import { useAdminData } from '../../features/admin/useAdminData';
 import {
   firstText,
@@ -28,23 +28,23 @@ import {
   type TableColumn,
 } from '../../features/admin/components/AdminUi';
 
-interface PurchaseLine {
-  key: string;
-  product_id: string;
-  quantity: string;
-  /** Lo que se pagó por toda la línea; el costo unitario se calcula con la cantidad. */
-  paid_amount: string;
-  discount_amount: string;
-  tax_amount: string;
-}
-const emptyLine = (): PurchaseLine => ({
-  key: crypto.randomUUID(),
-  product_id: '',
-  quantity: '1',
-  paid_amount: '',
-  discount_amount: '0',
-  tax_amount: '0',
-});
+/**
+ * Compras de carne. El negocio no compra chorizos terminados: compra carne, y de
+ * cada compra sale un número de chorizos. Por eso la compra no lleva líneas por
+ * producto ni descuentos ni impuestos: lo que aporta es el costo por unidad
+ * —valor pagado ÷ chorizos obtenidos— que el servidor aplica a todo el catálogo.
+ */
+const emptyForm = {
+  supplier_id: '',
+  purchase_date: new Date().toISOString().slice(0, 10),
+  invoice_number: '',
+  input_quantity: '',
+  amount: '',
+  yield_units: '',
+  amount_paid: '0',
+  due_date: '',
+  notes: '',
+};
 
 export function PurchasesPage() {
   const purchasesState = useAdminData<Purchase>(
@@ -57,25 +57,11 @@ export function PurchasesPage() {
     ascending: true,
     limit: 500,
   });
-  const productsState = useAdminData<AdminProduct>('products', {
-    orderBy: 'name',
-    ascending: true,
-    limit: 1000,
-  });
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('all');
   const [modalOpen, setModalOpen] = useState(false);
-  const [form, setForm] = useState({
-    supplier_id: '',
-    purchase_date: new Date().toISOString().slice(0, 10),
-    invoice_number: '',
-    amount_paid: '0',
-    due_date: '',
-    notes: '',
-  });
-  const [lines, setLines] = useState<PurchaseLine[]>([emptyLine()]);
+  const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
-  const [receiving, setReceiving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -93,109 +79,49 @@ export function PurchasesPage() {
       ),
     [purchasesState.data, search, status, supplierById],
   );
-  const totals = useMemo(() => purchaseTotals(lines), [lines]);
-  const grandTotal = totals.total;
-  // `purchases.paid_amount <= total_amount` es una restricción de la base.
-  const paidToSupplier = Math.min(round2(toNumber(form.amount_paid)), grandTotal);
+
+  const total = round2(toNumber(form.amount));
+  const yieldUnits = toNumber(form.yield_units);
+  // El dato que justifica toda la pantalla.
+  const unitCost = yieldUnits > 0 ? round2(total / yieldUnits) : 0;
+  const paidToSupplier = Math.min(round2(toNumber(form.amount_paid)), total);
 
   const openCreate = () => {
-    setForm({
-      supplier_id: '',
-      purchase_date: new Date().toISOString().slice(0, 10),
-      invoice_number: '',
-      amount_paid: '0',
-      due_date: '',
-      notes: '',
-    });
-    setLines([emptyLine()]);
+    setForm({ ...emptyForm, purchase_date: new Date().toISOString().slice(0, 10) });
     setError(null);
     setModalOpen(true);
   };
-  const updateLine = (key: string, field: keyof Omit<PurchaseLine, 'key'>, value: string) =>
-    setLines((current) =>
-      current.map((line) => (line.key === key ? { ...line, [field]: value } : line)),
-    );
 
   const savePurchase = async (event: FormEvent) => {
     event.preventDefault();
-    if (
-      !lines.length ||
-      lines.some(
-        (line) =>
-          !line.product_id || toNumber(line.quantity) <= 0 || toNumber(line.paid_amount) <= 0,
-      )
-    ) {
-      setError('Completa cada línea con producto, cantidad y valor pagado.');
+    if (!form.supplier_id || toNumber(form.input_quantity) <= 0 || total <= 0 || yieldUnits <= 0) {
+      setError('Completa proveedor, kilos de carne, valor pagado y chorizos obtenidos.');
       return;
     }
     setSaving(true);
     setError(null);
     try {
-      const purchase = await insertRecord<Purchase>('purchases', {
-        supplier_id: form.supplier_id,
-        purchase_date: form.purchase_date,
-        invoice_number: form.invoice_number || null,
-        status: 'draft',
-        subtotal_amount: totals.subtotal,
-        discount_amount: totals.discount,
-        tax_amount: totals.tax,
-        total_amount: grandTotal,
-        paid_amount: paidToSupplier,
-        balance_amount: round2(grandTotal - paidToSupplier),
-        due_date: form.due_date || null,
-        notes: form.notes || null,
-      });
-      // `purchase_items` exige sku y product_name (copia histórica del producto)
-      // y las columnas subtotal_amount / total_amount, no "subtotal".
-      for (const line of lines) {
-        const amounts = lineAmounts(line);
-        const product = productsState.data.find((item) => item.id === line.product_id);
-        await insertRecord('purchase_items', {
-          purchase_id: purchase.id,
-          product_id: line.product_id,
-          sku: String(product?.sku ?? ''),
-          product_name: String(product?.name ?? ''),
-          quantity: amounts.quantity,
-          unit_cost: amounts.unitCost,
-          subtotal_amount: amounts.subtotal,
-          discount_amount: amounts.discount,
-          tax_amount: amounts.tax,
-          total_amount: amounts.total,
-        });
-      }
+      const result = (await invokeAdminRpc('register_meat_purchase', {
+        p_supplier_id: form.supplier_id,
+        p_purchase_date: form.purchase_date,
+        p_input_quantity: toNumber(form.input_quantity),
+        p_amount: total,
+        p_yield_units: yieldUnits,
+        p_invoice_number: form.invoice_number || null,
+        p_paid_amount: paidToSupplier,
+        p_due_date: form.due_date || null,
+        p_notes: form.notes || null,
+      })) as { unit_cost?: number } | null;
       setModalOpen(false);
       setSuccess(
-        'Compra creada en borrador. Recíbela cuando la mercancía entre físicamente a bodega.',
+        `Compra registrada. El costo por chorizo quedó en ${formatMoney(result?.unit_cost ?? unitCost)} y se aplicó a todos los productos.`,
       );
-      window.setTimeout(() => setSuccess(null), 4500);
+      window.setTimeout(() => setSuccess(null), 5000);
       await purchasesState.reload();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'No fue posible guardar la compra.');
     } finally {
       setSaving(false);
-    }
-  };
-
-  const receive = async (purchase: Purchase) => {
-    if (
-      !window.confirm(
-        `¿Confirmas que la compra ${firstText(purchase, 'purchase_number', 'consecutive')} fue recibida? Esta acción incrementará inventario y actualizará costos.`,
-      )
-    )
-      return;
-    setReceiving(purchase.id);
-    setError(null);
-    try {
-      await invokeAdminRpc('receive_purchase', { p_purchase_id: purchase.id });
-      setSuccess(
-        'Compra recibida: inventario, costo promedio y cuenta por pagar fueron actualizados.',
-      );
-      window.setTimeout(() => setSuccess(null), 4500);
-      await purchasesState.reload();
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'No fue posible recibir la compra.');
-    } finally {
-      setReceiving(null);
     }
   };
 
@@ -228,6 +154,36 @@ export function PurchasesPage() {
           </p>
         </div>
       ),
+    },
+    {
+      key: 'meat',
+      header: 'Carne',
+      render: (purchase) =>
+        purchase.input_quantity ? (
+          <span className="font-semibold">{toNumber(purchase.input_quantity)} kg</span>
+        ) : (
+          <span className="text-artisan-muted">—</span>
+        ),
+    },
+    {
+      key: 'yield',
+      header: 'Chorizos',
+      render: (purchase) =>
+        purchase.yield_units ? (
+          <span className="font-semibold">{toNumber(purchase.yield_units)}</span>
+        ) : (
+          <span className="text-artisan-muted">—</span>
+        ),
+    },
+    {
+      key: 'unitCost',
+      header: 'Costo por chorizo',
+      render: (purchase) =>
+        purchase.unit_cost_result ? (
+          <span className="font-black text-wine">{formatMoney(purchase.unit_cost_result)}</span>
+        ) : (
+          <span className="text-artisan-muted">—</span>
+        ),
     },
     {
       key: 'total',
@@ -263,7 +219,7 @@ export function PurchasesPage() {
                 draft: 'Borrador',
                 ordered: 'Ordenada',
                 partial: 'Parcial',
-                received: 'Recibida',
+                received: 'Registrada',
                 cancelled: 'Cancelada',
               } as Record<string, string>
             )[purchase.status]
@@ -271,32 +227,14 @@ export function PurchasesPage() {
         />
       ),
     },
-    {
-      key: 'actions',
-      header: 'Acción',
-      render: (purchase) =>
-        purchase.status !== 'received' && purchase.status !== 'cancelled' ? (
-          <Button
-            variant="secondary"
-            className="min-h-9 px-3 py-1.5"
-            disabled={receiving === purchase.id}
-            onClick={() => void receive(purchase)}
-          >
-            <PackageCheck className="h-4 w-4" />
-            {receiving === purchase.id ? 'Recibiendo…' : 'Recibir'}
-          </Button>
-        ) : (
-          <span className="text-xs text-artisan-muted">Cerrada</span>
-        ),
-    },
   ];
 
   return (
     <>
       <PageHeader
         eyebrow="Abastecimiento"
-        title="Compras"
-        description="Registra facturas de proveedor y recibe mercancía de forma transaccional para actualizar kardex, costo promedio y cuentas por pagar."
+        title="Compras de carne"
+        description="Registra cuánta carne se compró, cuánto se pagó y cuántos chorizos salieron. Con eso el sistema fija el costo por chorizo que usan la utilidad y los reportes."
         actions={
           <>
             <ExportCsvButton filename="compras" rows={filtered} />
@@ -331,9 +269,7 @@ export function PurchasesPage() {
         >
           <option value="all">Todos los estados</option>
           <option value="draft">Borrador</option>
-          <option value="ordered">Ordenada</option>
-          <option value="partial">Parcial</option>
-          <option value="received">Recibida</option>
+          <option value="received">Registrada</option>
           <option value="cancelled">Cancelada</option>
         </select>
       </div>
@@ -347,7 +283,7 @@ export function PurchasesPage() {
         ) : (
           <EmptyState
             title="Sin compras registradas"
-            description="Crea una compra para documentar el abastecimiento y su costo real."
+            description="Registra la compra de carne para que el costo por chorizo salga de lo que realmente pagaste."
             action={
               <Button onClick={openCreate}>
                 <Plus className="h-4 w-4" />
@@ -359,10 +295,10 @@ export function PurchasesPage() {
       </section>
       <Modal
         open={modalOpen}
-        title="Nueva compra"
-        description="Guarda el documento en borrador. El inventario solo cambia al usar la acción Recibir."
+        title="Nueva compra de carne"
+        description="El costo por chorizo se calcula solo y queda como costo de todos los productos."
         onClose={() => !saving && setModalOpen(false)}
-        size="xl"
+        size="lg"
       >
         <form onSubmit={savePurchase} className="space-y-5">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -407,113 +343,55 @@ export function PurchasesPage() {
               />
             </label>
           </div>
-          <div className="overflow-hidden rounded-2xl border border-artisan-line bg-white">
-            <div className="flex items-center justify-between border-b border-artisan-line bg-artisan-paper/60 px-4 py-3">
-              <h3 className="font-bold">Productos</h3>
-              <Button
-                type="button"
-                variant="secondary"
-                className="min-h-9"
-                onClick={() => setLines((current) => [...current, emptyLine()])}
-              >
-                <Plus className="h-4 w-4" />
-                Agregar línea
-              </Button>
-            </div>
-            <div className="divide-y divide-artisan-line">
-              {lines.map((line, index) => (
-                <div
-                  key={line.key}
-                  className="grid gap-3 p-4 lg:grid-cols-[2fr_repeat(5,1fr)_40px]"
-                >
-                  <label>
-                    <span className={labelClass}>Producto {index + 1}</span>
-                    <select
-                      required
-                      className={inputClass}
-                      value={line.product_id}
-                      onChange={(event) => updateLine(line.key, 'product_id', event.target.value)}
-                    >
-                      <option value="">Selecciona</option>
-                      {productsState.data.map((product) => (
-                        <option key={product.id} value={product.id}>
-                          {product.name} · {product.sku}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    <span className={labelClass}>Cantidad</span>
-                    <input
-                      required
-                      type="number"
-                      min="0.001"
-                      step="0.001"
-                      className={inputClass}
-                      value={line.quantity}
-                      onChange={(event) => updateLine(line.key, 'quantity', event.target.value)}
-                    />
-                  </label>
-                  <label>
-                    <span className={labelClass}>Valor pagado</span>
-                    <input
-                      required
-                      type="number"
-                      min="0"
-                      step="50"
-                      className={inputClass}
-                      value={line.paid_amount}
-                      onChange={(event) => updateLine(line.key, 'paid_amount', event.target.value)}
-                    />
-                  </label>
-                  <div>
-                    <span className={labelClass}>Costo unitario</span>
-                    <p
-                      className="flex min-h-11 items-center rounded-xl border border-artisan-line bg-artisan-paper px-3.5 py-2.5 font-black"
-                      aria-live="polite"
-                    >
-                      {formatMoney(lineAmounts(line).unitCost)}
-                    </p>
-                  </div>
-                  <label>
-                    <span className={labelClass}>Descuento</span>
-                    <input
-                      type="number"
-                      min="0"
-                      step="50"
-                      className={inputClass}
-                      value={line.discount_amount}
-                      onChange={(event) =>
-                        updateLine(line.key, 'discount_amount', event.target.value)
-                      }
-                    />
-                  </label>
-                  <label>
-                    <span className={labelClass}>Impuesto</span>
-                    <input
-                      type="number"
-                      min="0"
-                      step="50"
-                      className={inputClass}
-                      value={line.tax_amount}
-                      onChange={(event) => updateLine(line.key, 'tax_amount', event.target.value)}
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    aria-label="Quitar producto"
-                    disabled={lines.length === 1}
-                    className="mt-6 grid h-10 w-10 place-items-center rounded-xl text-red-700 hover:bg-red-50 disabled:opacity-30"
-                    onClick={() =>
-                      setLines((current) => current.filter((item) => item.key !== line.key))
-                    }
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-              ))}
-            </div>
+
+          <div className="grid gap-4 rounded-2xl border border-artisan-line bg-white p-4 sm:grid-cols-3">
+            <label>
+              <span className={labelClass}>Carne comprada (kg) *</span>
+              <input
+                required
+                type="number"
+                min="0.001"
+                step="0.001"
+                className={inputClass}
+                value={form.input_quantity}
+                placeholder="300"
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, input_quantity: event.target.value }))
+                }
+              />
+            </label>
+            <label>
+              <span className={labelClass}>Valor pagado *</span>
+              <input
+                required
+                type="number"
+                min="1"
+                step="100"
+                className={inputClass}
+                value={form.amount}
+                placeholder="3000000"
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, amount: event.target.value }))
+                }
+              />
+            </label>
+            <label>
+              <span className={labelClass}>Chorizos obtenidos *</span>
+              <input
+                required
+                type="number"
+                min="1"
+                step="1"
+                className={inputClass}
+                value={form.yield_units}
+                placeholder="630"
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, yield_units: event.target.value }))
+                }
+              />
+            </label>
           </div>
+
           <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
             <div className="space-y-4">
               <label>
@@ -533,7 +411,7 @@ export function PurchasesPage() {
                     type="number"
                     min="0"
                     step="100"
-                    max={grandTotal}
+                    max={total}
                     className={inputClass}
                     value={form.amount_paid}
                     onChange={(event) =>
@@ -557,27 +435,31 @@ export function PurchasesPage() {
             </div>
             <dl className="space-y-3 rounded-2xl bg-wine-dark p-5 text-sm text-white">
               <div className="flex justify-between">
-                <dt className="text-white/65">Subtotal</dt>
-                <dd>{formatMoney(totals.subtotal)}</dd>
+                <dt className="text-white/65">Total pagado</dt>
+                <dd>{formatMoney(total)}</dd>
               </div>
               <div className="flex justify-between">
-                <dt className="text-white/65">Descuentos</dt>
-                <dd>− {formatMoney(totals.discount)}</dd>
+                <dt className="text-white/65">Chorizos</dt>
+                <dd>{yieldUnits || '—'}</dd>
+              </div>
+              <div
+                className="flex justify-between border-t border-white/15 pt-3 text-lg font-black"
+                aria-live="polite"
+              >
+                <dt>Costo por chorizo</dt>
+                <dd className="text-artisan-gold">{formatMoney(unitCost)}</dd>
               </div>
               <div className="flex justify-between">
-                <dt className="text-white/65">Impuestos</dt>
-                <dd>{formatMoney(totals.tax)}</dd>
-              </div>
-              <div className="flex justify-between border-t border-white/15 pt-3 text-lg font-black">
-                <dt>Total</dt>
-                <dd className="text-artisan-gold">{formatMoney(grandTotal)}</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-white/65">Saldo</dt>
-                <dd className="font-bold">{formatMoney(round2(grandTotal - paidToSupplier))}</dd>
+                <dt className="text-white/65">Saldo al proveedor</dt>
+                <dd className="font-bold">{formatMoney(round2(total - paidToSupplier))}</dd>
               </div>
             </dl>
           </div>
+          <p className="text-xs text-artisan-muted">
+            Al guardar, ese costo por chorizo queda como costo de todos los productos activos y con
+            él se calcula la utilidad. La compra no cambia las existencias: el stock se sigue
+            manejando en Inventario.
+          </p>
           {error && <div className="rounded-xl bg-red-50 p-3 text-sm text-red-800">{error}</div>}
           <div className="flex justify-end gap-2 border-t border-artisan-line pt-4">
             <Button type="button" variant="secondary" onClick={() => setModalOpen(false)}>

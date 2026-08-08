@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { DatabaseZap, Info, ShoppingBasket } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { BadgePercent, DatabaseZap, Info, ShoppingBasket } from 'lucide-react';
+import { useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CheckoutForm } from '../components/store/CheckoutForm';
 import { Header } from '../components/store/Header';
@@ -39,9 +39,29 @@ export function StorefrontPage() {
   const [category, setCategory] = useState('Todos');
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  /**
+   * Cliente reconocido por el celular escrito en el checkout. Mientras esté
+   * puesto, el catálogo muestra SU precio: el acordado se ve al elegir, no
+   * después de confirmar.
+   */
+  const [buyer, setBuyer] = useState<{ phone: string; name: string } | null>(null);
+  const onPhoneIdentified = useCallback((identity: { phone: string; name: string } | null) => {
+    setBuyer((current) => {
+      if (!identity) return current === null ? current : null;
+      if (current && current.phone === identity.phone && current.name === identity.name)
+        return current;
+      return identity;
+    });
+  }, []);
 
   const settings = useQuery({ queryKey: ['public-settings'], queryFn: getPublicSettings });
-  const catalog = useQuery({ queryKey: ['catalog', user?.id ?? 'public'], queryFn: getCatalog });
+  const catalog = useQuery({
+    queryKey: ['catalog', buyer?.phone ?? user?.id ?? 'public'],
+    queryFn: () => getCatalog(buyer?.phone),
+    // Conserva los precios anteriores mientras llegan los del cliente, para que
+    // el catálogo no parpadee al escribir el celular.
+    placeholderData: (previous) => previous,
+  });
   const checkoutOptions = useQuery({ queryKey: ['checkout-options'], queryFn: getCheckoutOptions });
   const products = useMemo(() => catalog.data ?? [], [catalog.data]);
   const categories = useMemo(
@@ -55,6 +75,10 @@ export function StorefrontPage() {
   const priceById = useMemo(
     () => new Map(products.map((product) => [product.id, product.effective_price])),
     [products],
+  );
+  // ¿El servidor devolvió algún precio distinto del público para este comprador?
+  const hasAgreedPrice = products.some(
+    (product) => product.price_source && product.price_source !== 'public',
   );
   const estimatedTotal = lines.reduce(
     (sum, line) => sum + line.quantity * (priceById.get(line.productId) ?? 0),
@@ -145,14 +169,30 @@ export function StorefrontPage() {
             <div>
               <span className="eyebrow eyebrow--wine">Nuestros sabores</span>
               <h2 id="catalog-title">Arma tu pedido</h2>
-              <p>
-                El precio visible corresponde a tu sesión; el servidor lo confirmará al comprar.
-              </p>
+              <p>El precio que ves es el que se cobra; el servidor lo confirma al comprar.</p>
             </div>
             <span className="availability-pill">
               <DatabaseZap aria-hidden="true" /> Pedidos en línea
             </span>
           </div>
+          {buyer && (
+            <p className="buyer-pricing-notice" role="status">
+              <BadgePercent aria-hidden="true" />
+              <span>
+                {hasAgreedPrice ? (
+                  <>
+                    <strong>{buyer.name || 'Cliente registrado'}</strong>, estos son tus precios
+                    acordados.
+                  </>
+                ) : (
+                  <>
+                    <strong>{buyer.name || 'Cliente registrado'}</strong>, te reconocimos: estos son
+                    los precios que se te cobran.
+                  </>
+                )}
+              </span>
+            </p>
+          )}
           {catalog.isLoading ? (
             <LoadingState label="Consultando sabores y precios…" />
           ) : catalog.error ? (
@@ -201,6 +241,7 @@ export function StorefrontPage() {
               paymentMethods={checkoutOptions.data?.paymentMethods ?? []}
               deliveryMethods={checkoutOptions.data?.deliveryMethods ?? []}
               onSubmit={submit}
+              onPhoneIdentified={onPhoneIdentified}
             />
             <CartSummary
               products={products}

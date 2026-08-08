@@ -32,11 +32,17 @@ El frontend muestra una estimación, pero no envía un precio definitivo. Postgr
 
 ### D-05. El celular identifica al comprador
 
-El comprador no se registra ni inicia sesión: escribe su celular y con eso la tienda lo reconoce, autocompleta su entrega y aplica su lista de precios. Si el número no existe, se crea el cliente con la lista pública. El acceso autenticado (Supabase Auth) queda reservado al personal del negocio.
+El comprador no se registra ni inicia sesión: escribe su celular y con eso la tienda lo reconoce, autocompleta su entrega y **muestra en el catálogo el precio que se le va a cobrar** (`get_catalog_prices_for_phone`, 202608070011), no solo al confirmar. Si el número no existe, se crea el cliente con la lista pública. El acceso autenticado (Supabase Auth) queda reservado al personal del negocio.
 
 La versión anterior exigía un código SMS de un solo uso a todo celular ya registrado. Como el proyecto no tiene proveedor de SMS contratado, eso dejaba sin poder comprar justamente a los clientes que repetían (202608070009).
 
 **Consecuencia:** quien conozca un celular registrado puede pedir a ese nombre y ver los precios de esa lista. Es una decisión comercial explícita para una base de pocas decenas de clientes donde cada pedido se confirma antes de despachar. Documento, correo, saldo, cupo e historial siguen sin salir del panel.
+
+### D-05b. La compra de carne fija el costo por unidad
+
+El negocio compra materia prima, no producto terminado: una compra de carne rinde una cantidad de chorizos y el costo por unidad es `valor pagado ÷ unidades obtenidas`, igual para los tres sabores. `register_meat_purchase` (202608070012) registra la compra sin líneas por producto, sin descuento y sin impuesto, y escribe ese costo como costo actual y promedio de todos los productos activos.
+
+**Consecuencia:** la compra no mueve existencias —repartir el rendimiento entre sabores sería un dato inventado— y el stock se sigue registrando en Inventario. La utilidad queda anclada a lo que realmente se pagó por producir cada unidad.
 
 ### D-06. Reservar antes de vender
 
@@ -71,7 +77,7 @@ Pedidos, pagos, compras, gastos, kardex, caja e historial no se borran físicame
 **Excepciones deliberadas, con compuerta explícita y local a la transacción:**
 
 - `delete_order_permanently` (superadmin, confirmando el consecutivo) elimina un pedido en cualquier estado, incluido pagado o entregado. Antes de borrar revierte el inventario que el pedido movió, descuenta de caja lo que sus pagos habían sumado, elimina cartera y pagos y **recalcula** los agregados del cliente. Lo rechaza un gasto contable asociado, que es un documento propio de contabilidad.
-- `update_inventory_adjustment` / `delete_inventory_adjustment` (superadmin o admin) corrigen o eliminan un **ajuste manual** de inventario, recalculan el stock y recolocan los saldos posteriores del kardex. Los movimientos originados en un pedido o una compra siguen siendo intocables.
+- `update_inventory_adjustment` / `delete_inventory_adjustment` (superadmin o admin) corrigen o eliminan un movimiento **digitado a mano** —inventario inicial o ajuste—, recalculan el stock y recolocan los saldos posteriores del kardex. Los movimientos originados en un pedido o una compra siguen siendo intocables.
 
 Ambas dejan huella en la auditoría: la purga de pedido, una entrada técnica sin contenido comercial; la corrección de kardex, el antes y el después completos.
 
