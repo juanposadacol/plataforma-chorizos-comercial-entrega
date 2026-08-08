@@ -194,8 +194,13 @@ export interface InventoryMovement extends AdminRecord {
   created_at: string;
 }
 
-/** Movimientos que nacen de un ajuste manual y por eso se pueden corregir o eliminar. */
+/**
+ * Movimientos digitados a mano y por eso corregibles o eliminables: el
+ * inventario inicial y los ajustes. Los que nacen de un pedido o una compra se
+ * corrigen en su documento de origen.
+ */
 export const EDITABLE_MOVEMENT_TYPES = [
+  'initial',
   'positive_adjustment',
   'negative_adjustment',
   'damage',
@@ -223,6 +228,12 @@ export interface Supplier extends AdminRecord {
 
 export interface Purchase extends AdminRecord {
   purchase_number?: string;
+  /** Kilos de carne comprados. */
+  input_quantity?: number;
+  /** Chorizos obtenidos de esa carne. */
+  yield_units?: number;
+  /** Costo por chorizo resultante: total pagado ÷ chorizos obtenidos. */
+  unit_cost_result?: number;
   consecutive?: string;
   supplier_id?: string;
   supplier_name?: string;

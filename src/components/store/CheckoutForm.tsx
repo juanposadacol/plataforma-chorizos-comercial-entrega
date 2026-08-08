@@ -24,6 +24,12 @@ interface CheckoutFormProps {
   paymentMethods: SelectOption[];
   deliveryMethods: SelectOption[];
   onSubmit: (values: CheckoutFormValues) => Promise<void>;
+  /**
+   * Avisa qué celular completo escribió el comprador y, si resultó ser un
+   * cliente conocido, su nombre. La tienda lo usa para mostrar en el catálogo
+   * el precio que de verdad se le va a cobrar.
+   */
+  onPhoneIdentified?: (identity: { phone: string; name: string } | null) => void;
 }
 
 export function CheckoutForm({
@@ -33,6 +39,7 @@ export function CheckoutForm({
   paymentMethods,
   deliveryMethods,
   onSubmit,
+  onPhoneIdentified,
 }: CheckoutFormProps) {
   const { user } = useAuth();
   const {
@@ -72,14 +79,18 @@ export function CheckoutForm({
     const timer = window.setTimeout(() => {
       if (!complete) {
         setAutofillNotice('');
+        onPhoneIdentified?.(null);
         return;
       }
       void loadCustomerProfile(phone, Boolean(user)).then((profile: CustomerProfile | null) => {
         if (cancelled) return;
         if (!profile) {
           setAutofillNotice('');
+          // Celular completo pero desconocido: el catálogo vuelve al precio público.
+          onPhoneIdentified?.(null);
           return;
         }
+        onPhoneIdentified?.({ phone, name: profile.name });
         const values: Record<AutofillField, string> = {
           customerName: profile.name,
           address: profile.address,
@@ -104,7 +115,7 @@ export function CheckoutForm({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [phone, user, getValues, setValue]);
+  }, [phone, user, getValues, setValue, onPhoneIdentified]);
 
   const fieldError = (name: keyof CheckoutFormValues) =>
     errors[name] ? (

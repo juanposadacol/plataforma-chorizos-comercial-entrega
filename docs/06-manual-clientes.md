@@ -28,7 +28,7 @@ El total del resumen es estimado. Al confirmar, el servidor vuelve a consultar e
 
 ## 2. Si ya compró antes
 
-No hay clave, ni código por mensaje, ni cuenta que recordar. Escriba su celular al comienzo del formulario y la tienda carga sola su nombre y su dirección de entrega para que solo los revise. Si el negocio le asignó una lista de precios propia, el pedido se calcula con ella.
+No hay clave, ni código por mensaje, ni cuenta que recordar. Escriba su celular al comienzo del formulario y la tienda carga sola su nombre y su dirección de entrega para que solo los revise. Si el negocio le asignó precios propios, **el catálogo cambia de inmediato y muestra lo que se le va a cobrar**, marcado como «Tu precio»: ya no hay que llegar al final de la compra para verlo.
 
 Revise siempre esos datos antes de confirmar: pueden estar desactualizados si se mudó o cambió de barrio.
 

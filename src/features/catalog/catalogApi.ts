@@ -23,7 +23,13 @@ const mapProduct = (row: Record<string, unknown>): Product => ({
   price_source: (row.price_source as Product['price_source']) ?? 'public',
 });
 
-export const getCatalog = async (): Promise<Product[]> => {
+/**
+ * Catálogo con el precio que se va a cobrar. Si se pasa un celular, el servidor
+ * resuelve la condición comercial de ese cliente (precio acordado, lista o
+ * volumen) para que el precio acordado se vea en la tienda y no solo en el
+ * total del pedido. Un celular desconocido devuelve el catálogo público.
+ */
+export const getCatalog = async (phone?: string): Promise<Product[]> => {
   if (!isSupabaseConfigured || !supabase) {
     if (env.demoMode) return demoProducts;
     throw new AppError(
@@ -32,7 +38,9 @@ export const getCatalog = async (): Promise<Product[]> => {
     );
   }
 
-  const { data, error } = await supabase.rpc('get_catalog_prices');
+  const { data, error } = phone
+    ? await supabase.rpc('get_catalog_prices_for_phone', { p_phone: phone })
+    : await supabase.rpc('get_catalog_prices');
   if (error) throw new AppError('No pudimos cargar los productos.', error.code, error.message);
   return ((data ?? []) as Record<string, unknown>[]).map(mapProduct);
 };

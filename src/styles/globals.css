@@ -454,6 +454,53 @@ a {
   color: var(--wine);
   font-size: 1.1rem;
 }
+.price-block {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+}
+/* Marca el precio propio del cliente reconocido por su celular. */
+.price-tag {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  padding: 3px 8px;
+  border-radius: 999px;
+  color: #155b28;
+  background: #e8f5e8;
+  font-size: 0.63rem;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.price-tag em {
+  color: var(--muted);
+  font-size: 0.62rem;
+  font-style: normal;
+  font-weight: 700;
+  text-decoration: line-through;
+  text-transform: none;
+}
+/* Aviso de precios propios sobre el catálogo. */
+.buyer-pricing-notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 18px;
+  padding: 12px 15px;
+  border: 1px solid #b9e0c2;
+  border-radius: 14px;
+  color: #155b28;
+  background: #eefaf0;
+  font-size: 0.9rem;
+}
+.buyer-pricing-notice svg {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+}
 .product-description {
   min-height: 44px;
   margin: 10px 0 13px;

@@ -7,11 +7,11 @@ Aplicación web en español para vender chorizos artesanales y administrar pedid
 ## Qué incluye
 
 - Tienda responsiva con catálogo, filtros por categoría, carrito persistente por presentación y checkout sin registro.
-- El comprador se identifica escribiendo su celular: sin cuenta, sin clave y sin código por mensaje. El acceso autenticado queda reservado al personal del negocio.
+- El comprador se identifica escribiendo su celular: sin cuenta, sin clave y sin código por mensaje; con eso el catálogo pasa a mostrar su precio acordado. El acceso autenticado queda reservado al personal del negocio.
 - Precios público, por lista, especiales por cliente y tramos por volumen configurables.
 - Creación transaccional de pedidos: el servidor recalcula precios, valida existencias, crea snapshots y reserva inventario.
 - Panel privado con pedidos, clientes, productos, precios, inventario, compras, proveedores, pagos, gastos, reportes, usuarios, notificaciones y configuración.
-- Kardex, recepción de compras, costo promedio, cartera, caja, auditoría y conservación histórica.
+- Kardex corregible, compras de carne que fijan el costo por chorizo, cartera, caja, auditoría y conservación histórica.
 - Cola de notificaciones y Edge Function para WhatsApp Business Cloud, con enlace manual de respaldo.
 - Exportaciones CSV, Excel compatible (`.xls`) y PDF desde reportes; exportación CSV en listados administrativos compatibles.
 - Comprobante de entrega en PDF por pedido, con detalle, saldo y espacio de firma para el cliente y para quien entrega.
