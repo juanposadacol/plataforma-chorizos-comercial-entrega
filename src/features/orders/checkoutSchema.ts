@@ -2,6 +2,19 @@ import { z } from 'zod';
 
 export const checkoutSchema = z.object({
   customerName: z.string().trim().min(3, 'Escribe el nombre completo.').max(120),
+  /**
+   * Opcional a propósito: sin correo el pedido se crea igual y solo se pierde
+   * el mensaje de confirmación. Exigirlo dejaría sin comprar a quien no tiene o
+   * no quiere darlo.
+   */
+  customerEmail: z
+    .string()
+    .trim()
+    .max(254, 'El correo es demasiado largo.')
+    .refine(
+      (value) => value === '' || /^[^\s@,;]+@[^\s@,;]+\.[a-z]{2,}$/i.test(value),
+      'Escribe un correo válido o déjalo vacío.',
+    ),
   customerPhone: z
     .string()
     .trim()

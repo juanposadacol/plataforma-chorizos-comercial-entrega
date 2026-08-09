@@ -12,7 +12,7 @@ Aplicación web en español para vender chorizos artesanales y administrar pedid
 - Creación transaccional de pedidos: el servidor recalcula precios, valida existencias, crea snapshots y reserva inventario.
 - Panel privado con pedidos, clientes, productos, precios, inventario, compras, proveedores, pagos, gastos, reportes, usuarios, notificaciones y configuración.
 - Kardex corregible, compras de carne que fijan el costo por chorizo, cartera, caja, auditoría y conservación histórica.
-- Cola de notificaciones y Edge Function para WhatsApp Business Cloud, con enlace manual de respaldo.
+- Cola de notificaciones con dos canales: WhatsApp Business Cloud al negocio y correo de confirmación al comprador (Google Apps Script + Gmail), ambos con reintentos y sin poder afectar al pedido ya guardado.
 - Exportaciones CSV, Excel compatible (`.xls`) y PDF desde reportes; exportación CSV en listados administrativos compatibles.
 - Comprobante de entrega en PDF por pedido, con detalle, saldo y espacio de firma para el cliente y para quien entrega.
 - PWA instalable con caché de recursos estáticos y del app-shell. Confirmar precios o pedidos siempre requiere conexión; ver [PWA y comportamiento sin conexión](#pwa-y-comportamiento-sin-conexión).

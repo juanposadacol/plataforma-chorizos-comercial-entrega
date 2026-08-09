@@ -111,6 +111,9 @@ export function StorefrontPage() {
         customer: {
           name: values.customerName,
           phone: normalizeColombianPhone(values.customerPhone),
+          // Con correo, el servidor encola el mensaje de confirmación; sin él, el
+          // pedido se crea igual.
+          email: values.customerEmail.trim() || undefined,
         },
         items,
         delivery: {
@@ -127,6 +130,7 @@ export function StorefrontPage() {
       saveLocalProfile({
         phone: normalizeColombianPhone(values.customerPhone),
         name: values.customerName.trim(),
+        email: values.customerEmail.trim(),
         address: values.address.trim(),
         neighborhood: values.neighborhood.trim(),
         municipality: values.municipality.trim(),

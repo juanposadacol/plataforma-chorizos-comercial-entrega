@@ -92,6 +92,8 @@ const storefrontOrderSchema = z
       .object({
         name: z.string().trim().min(2).max(140),
         phone,
+        // Opcional: si viene, el pedido dispara el correo de confirmación.
+        email: z.string().trim().email().max(254).optional(),
       })
       .strict(),
     items: z

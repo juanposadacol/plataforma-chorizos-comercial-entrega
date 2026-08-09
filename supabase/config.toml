@@ -29,5 +29,10 @@ verify_jwt = false
 [functions.process-whatsapp-outbox]
 verify_jwt = false
 
+# Correo de confirmación al comprador. No lleva JWT: se autentica con el mismo
+# secreto de outbox que ya usa el worker de WhatsApp.
+[functions.process-email-outbox]
+verify_jwt = false
+
 [functions.invite-staff]
 verify_jwt = false
