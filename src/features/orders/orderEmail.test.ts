@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   appsScriptRequestBody,
+  classifyAppsScriptOutcome,
   isDeliverableEmail,
   normalizeOrderEmailPayload,
   NO_NOTES_TEXT,
@@ -99,6 +100,59 @@ describe('correo de confirmación: qué se le envía al comprador', () => {
     // deliveryId es lo que permite a Apps Script descartar un reintento.
     expect(body.deliveryId).toBe('delivery-1');
     expect(body.orderNumber).toBe('PED-00000019');
+  });
+});
+
+describe('cuando Gmail o Apps Script fallan', () => {
+  // La garantía del negocio: para cuando este worker corre, `create_order` ya
+  // hizo commit. Lo único que decide esta clasificación es el destino de la
+  // fila del outbox; el pedido ya está guardado pase lo que pase.
+  it('un envío correcto se marca enviado y no se reintenta', () => {
+    expect(classifyAppsScriptOutcome(200, { ok: true, messageId: 'delivery-1' })).toEqual({
+      ok: true,
+      retryable: false,
+      externalId: 'delivery-1',
+      duplicated: false,
+    });
+  });
+
+  it('Google caído o saturado deja el envío pendiente de reintento', () => {
+    for (const status of [429, 500, 502, 503]) {
+      const outcome = classifyAppsScriptOutcome(status, { ok: false });
+      expect(outcome.ok).toBe(false);
+      // Pendiente, no perdido: el pedido sigue existiendo y el correo vuelve a
+      // intentarse en la siguiente pasada del worker.
+      expect(outcome.retryable).toBe(true);
+    }
+  });
+
+  it('un secreto o unos datos equivocados no se reintentan en vano', () => {
+    for (const status of [400, 401, 403, 404]) {
+      const outcome = classifyAppsScriptOutcome(status, { ok: false, error: 'unauthorized' });
+      expect(outcome.ok).toBe(false);
+      expect(outcome.retryable).toBe(false);
+    }
+  });
+
+  it('un 200 con ok:false tampoco se toma por enviado', () => {
+    // Apps Script responde SIEMPRE 200; el veredicto real está en el cuerpo.
+    const outcome = classifyAppsScriptOutcome(200, { ok: false, error: 'invalid_payload' });
+    expect(outcome.ok).toBe(false);
+    expect(outcome.retryable).toBe(false);
+  });
+
+  it('un reintento que Apps Script ya había enviado cuenta como éxito', () => {
+    // Tercera defensa contra duplicados: el comprador ya tiene su correo, así
+    // que la fila se cierra en vez de reintentarse para siempre.
+    const outcome = classifyAppsScriptOutcome(200, { ok: true, duplicated: true });
+    expect(outcome).toMatchObject({ ok: true, retryable: false, duplicated: true });
+  });
+
+  it('un duplicado reportado con estado de error tampoco se reintenta', () => {
+    expect(classifyAppsScriptOutcome(500, { duplicated: true })).toMatchObject({
+      ok: true,
+      retryable: false,
+    });
   });
 });
 

@@ -2,6 +2,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2.49.1';
 import { jsonResponse, readJson } from '../_shared/http.ts';
 import {
   appsScriptRequestBody,
+  classifyAppsScriptOutcome,
   normalizeOrderEmailPayload,
   type OrderEmailPayload,
 } from '../_shared/order-email.ts';
@@ -85,20 +86,18 @@ async function sendWithAppsScript(payload: OrderEmailPayload): Promise<SendResul
     decoded = { status: response.status };
   }
 
-  const ok = response.ok && decoded.ok === true;
-  const duplicated = decoded.duplicated === true;
+  const outcome = classifyAppsScriptOutcome(response.status, decoded);
   return {
-    ok: ok || duplicated,
-    // 401/400 significan secreto o datos equivocados: reintentar no los arregla.
-    retryable: response.status === 429 || response.status >= 500,
-    externalId: typeof decoded.messageId === 'string' ? decoded.messageId : null,
+    ok: outcome.ok,
+    retryable: outcome.retryable,
+    externalId: outcome.externalId,
     response: {
       status: response.status,
       ok: decoded.ok === true,
-      duplicated,
+      duplicated: outcome.duplicated,
       ...(typeof decoded.error === 'string' ? { error: decoded.error.slice(0, 300) } : {}),
     },
-    error: ok || duplicated ? null : `HTTP ${response.status}`,
+    error: outcome.ok ? null : `HTTP ${response.status}`,
   };
 }
 

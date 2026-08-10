@@ -115,3 +115,41 @@ export const normalizeOrderEmailPayload = (
  */
 export const appsScriptRequestBody = (payload: OrderEmailPayload, secret: string): string =>
   JSON.stringify({ secret, ...payload });
+
+/** Resultado de un intento de envío, ya interpretado. */
+export interface AppsScriptOutcome {
+  /** El correo salió (o Apps Script confirmó que ya lo había mandado). */
+  ok: boolean;
+  /** ¿Vale la pena volver a intentarlo? */
+  retryable: boolean;
+  /** Identificador que devuelve Apps Script, para poder rastrear el envío. */
+  externalId: string | null;
+  duplicated: boolean;
+}
+
+/**
+ * Traduce la respuesta del Web App a una decisión del outbox.
+ *
+ * Nada de lo que se decida aquí puede tocar el pedido: para cuando este worker
+ * corre, `create_order` ya hizo commit. Lo único que está en juego es si la
+ * fila de `notification_deliveries` queda enviada, pendiente de reintento o
+ * fallida.
+ *
+ *   - `duplicated`: Apps Script ya había enviado este `deliveryId`. Cuenta como
+ *     éxito, porque el comprador sí tiene su correo.
+ *   - 429 y 5xx: Gmail saturado o Google caído. Se reintenta.
+ *   - 400 y 401: datos o secreto equivocados. Reintentar da lo mismo.
+ */
+export const classifyAppsScriptOutcome = (
+  status: number,
+  decoded: Record<string, unknown>,
+): AppsScriptOutcome => {
+  const duplicated = decoded.duplicated === true;
+  const sent = status >= 200 && status < 300 && decoded.ok === true;
+  return {
+    ok: sent || duplicated,
+    retryable: !(sent || duplicated) && (status === 429 || status >= 500),
+    externalId: typeof decoded.messageId === 'string' ? decoded.messageId : null,
+    duplicated,
+  };
+};

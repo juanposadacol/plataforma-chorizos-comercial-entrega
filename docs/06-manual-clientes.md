@@ -24,6 +24,8 @@ En la tienda no hay que registrarse ni iniciar sesión: el celular identifica al
 
 El **correo electrónico es opcional**: si lo escribe, recibirá la confirmación del pedido con el detalle, el total y la dirección de entrega. Sin correo el pedido se registra igual.
 
+Si el negocio ya tiene un correo suyo registrado, el formulario se lo indica con una pista enmascarada (por ejemplo `j••••@g••••.com`) y **la confirmación llega ahí aunque deje el campo vacío**. Escriba uno solo si quiere cambiarlo: el nuevo reemplaza al anterior. El correo completo nunca se muestra a quien solo escribe su número; si compró antes desde este mismo dispositivo, ahí sí aparece completo porque usted lo escribió en él.
+
 Si el celular no existe, la plataforma crea el cliente con la lista pública. El cliente nunca debe elegir una categoría o lista de precios.
 
 El total del resumen es estimado. Al confirmar, el servidor vuelve a consultar el producto, el cliente, el precio vigente, la tarifa de entrega y el inventario. Si algo cambió, se aplicará el valor autorizado por el servidor o se mostrará un error sin crear un pedido incompleto.

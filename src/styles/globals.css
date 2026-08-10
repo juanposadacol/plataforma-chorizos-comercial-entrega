@@ -833,6 +833,11 @@ textarea[aria-invalid='true'] {
   color: var(--muted);
   font-size: 0.76rem;
 }
+/* Aviso de que la ficha del cliente ya tiene un correo guardado. */
+.field-help--saved {
+  color: var(--wine);
+  font-weight: 600;
+}
 .option-fieldset {
   margin: 24px 0 0;
   padding: 22px 0 0;
