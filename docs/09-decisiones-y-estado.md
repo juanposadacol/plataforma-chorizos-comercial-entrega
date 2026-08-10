@@ -170,7 +170,7 @@ Los listados exportan CSV y el módulo de reportes agrega SpreadsheetML `.xls` y
 
 - `netlify.toml`, redirección SPA, CSP y otras cabeceras.
 - `.env.example` y plantilla de secretos para funciones.
-- Edge Functions `create-order`, `process-whatsapp-outbox`, `process-email-outbox` e `invite-staff`.
+- Edge Functions `create-order`, `process-whatsapp-outbox`, `process-email-outbox`, `whatsapp-webhook` e `invite-staff`.
 - Pruebas Vitest de las 20 invariantes comerciales solicitadas y pruebas SQL del backend.
 - ESLint, TypeScript, Prettier, build reproducible y documentación 01–09.
 
@@ -197,7 +197,7 @@ Estos puntos no son defectos que deban resolverse con valores inventados:
 No bloquean la arquitectura base, pero deben evaluarse según la operación:
 
 - **Devoluciones parciales:** la función actual procesa devolución total; un flujo por líneas requiere reglas de inventario, reembolso e impuestos.
-- **Estados de entrega de Meta:** se registra aceptación de la API, pero no hay webhook para `delivered` o `read`.
+- **Estados de entrega de Meta:** existe `whatsapp-webhook` como herramienta de diagnóstico, que registra `sent`, `delivered`, `read` y `failed` con su `errors.code`. Falta decidir si esos estados deben reflejarse en el panel: hoy solo van a los logs y, opcionalmente, a la bitácora de `supabase/diagnostics/whatsapp_status_events.sql`.
 - **Carga administrada de imágenes/soportes:** el modelo acepta rutas y URLs; una interfaz completa de carga, antivirus, límites y políticas de Storage debe definirse si el negocio la necesita.
 - **Facturación electrónica e impuestos:** no se integra un proveedor fiscal ni se afirma cumplimiento tributario.
 - **Pagos en línea:** se registran métodos y recaudos, pero no hay pasarela ni conciliación automática de un adquirente.

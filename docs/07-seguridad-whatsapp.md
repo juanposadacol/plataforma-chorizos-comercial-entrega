@@ -123,7 +123,31 @@ El commit ocurre antes de llamar a Meta. Por eso una indisponibilidad, token ven
 7. pasa a `manual_required` si no hay proveedor configurado y existe respaldo;
 8. marca `failed` cuando no hay otra ruta.
 
-`sent` significa que la API aceptó la solicitud y devolvió un ID. Esta versión no incorpora un webhook de estados `delivered` o `read`; no interprete `sent` como lectura por el destinatario.
+`sent` significa que la API **aceptó** la solicitud y devolvió un `wamid`. No significa que el mensaje se haya entregado: Meta responde 200 en cuanto acepta y decide después si lo entrega. No interprete `sent` como recepción ni como lectura.
+
+## 5b. Webhook de estado (diagnóstico)
+
+La Edge Function `whatsapp-webhook` recibe los eventos `statuses` de Meta y registra `sent`, `delivered`, `read` y `failed` con su `errors.code`. Es la única forma de saber por qué un mensaje aceptado no llegó.
+
+- **GET**: responde la verificación de Meta (`hub.mode`, `hub.verify_token`, `hub.challenge`) devolviendo el challenge en texto plano. El token vive en el secreto `WHATSAPP_WEBHOOK_VERIFY_TOKEN`.
+- **POST**: comprueba la firma `x-hub-signature-256` contra `WHATSAPP_APP_SECRET` y descarta lo que no venga de Meta. Sin ese secreto el endpoint acepta cualquier cuerpo y lo advierte en los logs.
+- Siempre responde `200`: un 4xx haría que Meta reintentara y terminara desactivando la suscripción.
+
+La función **solo observa**. No envía, no cambia la plantilla y no toca el outbox.
+
+El destino de los eventos es, por omisión, los logs de la Edge Function. Existe además `supabase/diagnostics/whatsapp_status_events.sql`, una bitácora opcional que **no está en `supabase/migrations/`** —para que `supabase db push` no la cree por accidente— y que se ejecuta a mano si se quiere conservar el historial.
+
+`notification_deliveries` no puede almacenar estos estados: el enum `notification_status` no tiene `delivered` ni `read`, escribir `failed` desde el callback haría que el botón de reintento reenviara un mensaje que Meta ya rechazó, y `provider_response` se sobrescribe en cada intento. El `wamid` sí se comparte: es `notification_deliveries.external_id`, con índice único por `(provider, external_id)`.
+
+### Códigos frecuentes en un mensaje aceptado que no llega
+
+| Código           | Significado                                                                                                               |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `131049`         | Meta decidió no entregar el mensaje para «mantener la salud del ecosistema». Típico en plantillas de categoría marketing. |
+| `131026`         | Mensaje no entregable: el destinatario no tiene WhatsApp o no aceptó los términos.                                        |
+| `131047`         | Se requiere reenganche: pasaron más de 24 horas sin respuesta del usuario.                                                |
+| `131030`         | El destinatario no está en la lista de números permitidos: pasa cuando el número emisor sigue en modo de prueba.          |
+| `470` / `131050` | El usuario bloqueó o desactivó los mensajes del negocio.                                                                  |
 
 ## 6. Preparar Meta Business
 
