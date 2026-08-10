@@ -92,6 +92,10 @@ Todas esas acciones consultan el servidor y fallarán hasta que recupere la cone
 
 ## 8. Errores frecuentes
 
+### “Este sitio no está autorizado para crear pedidos”
+
+La dirección desde la que está comprando no figura en la lista de dominios autorizados del servidor. Normalmente ocurre justo después de cambiar el nombre o el dominio del sitio. **No es un problema de su dispositivo ni de su pedido: no se creó ninguna compra.** Verifique que está usando el dominio oficial del negocio; si es el correcto, avise al administrador, que debe actualizar `ALLOWED_ORIGINS` en Supabase.
+
 ### “Falta conectar la tienda”
 
 El sitio fue publicado sin variables públicas válidas de Supabase. El administrador debe corregir la instalación; no ingrese datos personales hasta que esté resuelto.

@@ -151,6 +151,26 @@ supabase secrets set \
 
 Puede omitir temporalmente los valores `WHATSAPP_*`; el pedido se guardará y la entrega quedará marcada para manejo manual. `SUPABASE_URL`, `SUPABASE_ANON_KEY` y `SUPABASE_SERVICE_ROLE_KEY` son suministradas por el entorno de Supabase a sus funciones alojadas.
 
+#### `ALLOWED_ORIGINS` y el nombre del sitio en Netlify
+
+`ALLOWED_ORIGINS` es una lista separada por comas de orígenes **exactos**: esquema, dominio y nada más. No admite comodines ni subdominios implícitos, y comparar el origen exacto es justamente lo que impide que otro sitio cree pedidos con las credenciales públicas.
+
+Por eso **renombrar el sitio en Netlify rompe el checkout** hasta que se actualice este secreto: el navegador empieza a mandar un `Origin` que no está en la lista y `create-order` responde `403 ORIGIN_NOT_ALLOWED`, que la tienda muestra como «Este sitio no está autorizado para crear pedidos». No hay nada que corregir en el código ni en una migración: la allowlist vive solo en el secreto.
+
+El valor debe incluir el dominio de producción vigente y, si se quiere seguir probando en local, `http://localhost:5173`:
+
+```bash
+supabase secrets set ALLOWED_ORIGINS=https://chorizosgranjalasmarias.netlify.app,http://localhost:5173
+```
+
+Las funciones leen el secreto en cada solicitud, así que **no hace falta volver a desplegarlas**; el cambio aplica en menos de un minuto. Confirme cuál quedó vigente con:
+
+```bash
+supabase secrets list
+```
+
+Si algún día se asigna un dominio propio, agréguelo a la misma lista (y a las redirecciones de Supabase Auth) antes de retirar el dominio `.netlify.app`.
+
 Despliegue las funciones:
 
 ```bash
