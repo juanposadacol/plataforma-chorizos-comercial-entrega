@@ -14,3 +14,8 @@ supabase/.temp/
 
 
 .env.local
+
+# Parches de entrega (cambios-N.patch). Son artefactos para aplicar desde
+# otra maquina, no contenido del repositorio: versionarlos mete dentro de un
+# commit una copia de ese mismo commit.
+*.patch
