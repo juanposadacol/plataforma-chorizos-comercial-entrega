@@ -5,7 +5,12 @@ import type { OrderRequest, OrderResult } from '../../types/domain';
 
 export const sanitizeOrderPayload = (input: OrderRequest): OrderRequest => ({
   idempotency_key: input.idempotency_key,
-  customer: { name: input.customer.name.trim(), phone: input.customer.phone },
+  customer: {
+    name: input.customer.name.trim(),
+    phone: input.customer.phone,
+    // Un correo vacío no viaja: el esquema del servidor lo rechazaría por forma.
+    ...(input.customer.email?.trim() ? { email: input.customer.email.trim() } : {}),
+  },
   items: input.items.map(({ product_id, quantity }) => ({ product_id, quantity })),
   delivery: {
     address: input.delivery.address.trim(),

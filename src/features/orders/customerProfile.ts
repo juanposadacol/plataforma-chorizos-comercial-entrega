@@ -9,6 +9,12 @@ export interface CustomerProfile {
   address: string;
   neighborhood: string;
   municipality: string;
+  /**
+   * Solo memoria del dispositivo. El servidor NO devuelve el correo en la
+   * búsqueda por celular: sería exponer un dato personal a quien conozca el
+   * número. Aquí sirve para que el mismo comprador no lo reescriba.
+   */
+  email?: string;
 }
 
 const clean = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
@@ -43,6 +49,7 @@ export const readLocalProfile = (phone: string): CustomerProfile | null => {
       address: clean(parsed.address),
       neighborhood: clean(parsed.neighborhood),
       municipality: clean(parsed.municipality),
+      email: clean(parsed.email),
     };
   } catch {
     return null;

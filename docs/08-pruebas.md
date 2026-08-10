@@ -209,7 +209,7 @@ Ejecute al menos en un teléfono angosto y un navegador de escritorio:
 1. abrir tienda, filtrar por categoría y cambiar cantidades y presentaciones;
 2. recargar y comprobar carrito;
 3. validar errores de formulario y consentimiento;
-4. comprar sin registrarse;
+4. comprar sin registrarse, con y sin correo, y comprobar que llega la confirmación cuando se escribió;
 5. volver a comprar con un celular ya registrado y comprobar que autocompleta y no pide acceso;
 6. usar «Volver a la tienda» desde la confirmación;
 7. ver el pedido en el panel;

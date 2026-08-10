@@ -62,6 +62,12 @@ La transacción crea la notificación y su entrega; el worker llama a Meta despu
 
 **Consecuencia:** WhatsApp no es la base de datos ni un punto único de falla. El scheduler es parte obligatoria de la operación automática.
 
+### D-08b. El correo del comprador usa el mismo outbox
+
+La confirmación por correo no se envía desde React ni desde la transacción: `create_order` deja una fila `notification_deliveries` con `channel='email'` y, después del commit, `process-email-outbox` la despacha contra un Web App de Google Apps Script que envía con la cuenta de Gmail del negocio. Su URL y su secreto son secretos de Edge Function.
+
+**Consecuencia:** un fallo de Gmail o de Apps Script nunca revierte una compra —solo deja el envío pendiente de reintento— y el correo no se duplica: `create_order` es idempotente, hay un índice único por notificación, la fila enviada no se vuelve a reclamar y Apps Script descarta un `deliveryId` repetido.
+
 ### D-09. Roles más RLS
 
 React protege rutas y adapta la interfaz, pero PostgreSQL aplica el límite real por rol, propiedad y función. La service role queda confinada al servidor.

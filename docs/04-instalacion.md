@@ -91,7 +91,7 @@ ALLOWED_ORIGINS=http://localhost:5173
 OUTBOX_WORKER_SECRET=UN_VALOR_LOCAL_ALEATORIO_LARGO
 ```
 
-WhatsApp puede quedar sin sus tres valores durante el desarrollo; la entrega pasará a respaldo manual.
+WhatsApp puede quedar sin sus tres valores durante el desarrollo; la entrega pasará a respaldo manual. El correo de confirmación también puede quedar sin configurar (`APPS_SCRIPT_EMAIL_URL` y `APPS_SCRIPT_EMAIL_SECRET`): el pedido se guarda igual y el envío queda registrado como no configurado.
 
 ```bash
 supabase functions serve --env-file supabase/functions/.env.local
@@ -143,7 +143,10 @@ supabase secrets set \
   WHATSAPP_GRAPH_API_VERSION=v23.0 \
   WHATSAPP_TEMPLATE_NAME=TU_PLANTILLA_APROBADA \
   WHATSAPP_TEMPLATE_LANGUAGE=es_CO \
-  STAFF_INVITE_REDIRECT_URL=https://TU_DOMINIO/admin/acceso
+  STAFF_INVITE_REDIRECT_URL=https://TU_DOMINIO/admin/acceso \
+  APPS_SCRIPT_EMAIL_URL=https://script.google.com/macros/s/TU_ID/exec \
+  APPS_SCRIPT_EMAIL_SECRET=TU_SECRETO_DE_CORREO \
+  BUSINESS_NAME="Chorizos Granja Las Marías"
 ```
 
 Puede omitir temporalmente los valores `WHATSAPP_*`; el pedido se guardará y la entrega quedará marcada para manejo manual. `SUPABASE_URL`, `SUPABASE_ANON_KEY` y `SUPABASE_SERVICE_ROLE_KEY` son suministradas por el entorno de Supabase a sus funciones alojadas.
@@ -153,10 +156,11 @@ Despliegue las funciones:
 ```bash
 supabase functions deploy create-order --no-verify-jwt
 supabase functions deploy process-whatsapp-outbox --no-verify-jwt
+supabase functions deploy process-email-outbox --no-verify-jwt
 supabase functions deploy invite-staff --no-verify-jwt
 ```
 
-`create-order` admite visitantes, por lo que valida por sí misma origen, contrato, sesión opcional y límite de solicitudes. `process-whatsapp-outbox` exige `x-outbox-secret`. `invite-staff` exige una sesión administrativa dentro de la función y reserva la asignación de `superadmin` a otro superadministrador. No quite estas validaciones aunque las funciones se desplieguen con `--no-verify-jwt`.
+`create-order` admite visitantes, por lo que valida por sí misma origen, contrato, sesión opcional y límite de solicitudes. `process-whatsapp-outbox` y `process-email-outbox` exigen `x-outbox-secret`. `invite-staff` exige una sesión administrativa dentro de la función y reserva la asignación de `superadmin` a otro superadministrador. No quite estas validaciones aunque las funciones se desplieguen con `--no-verify-jwt`.
 
 ### 5.4 Programar la cola de WhatsApp
 
@@ -171,6 +175,31 @@ x-outbox-secret: TU_SECRETO_ALEATORIO
 ```
 
 No programe esta llamada desde el navegador y no incluya el secreto en una URL. Compruebe en `notification_deliveries` que los registros pasan de `pending` a `sent`, `retrying`, `manual_required` o `failed`.
+
+### 5.5 Correo de confirmación con Google Apps Script
+
+El correo al comprador se envía desde la cuenta de Gmail del negocio a través de un Web App de Apps Script. El navegador nunca lo llama: lo hace la Edge Function `process-email-outbox` con un secreto compartido.
+
+1. Abra <https://script.google.com> con la cuenta de Gmail del negocio y cree un proyecto nuevo.
+2. Reemplace el contenido de `Código.gs` por el archivo `scripts/apps-script/correo-pedido.gs` de este repositorio.
+3. En **Configuración del proyecto → Propiedades del script**, agregue la propiedad `SHARED_SECRET` con un valor largo y aleatorio.
+4. **Implementar → Nueva implementación → Aplicación web**, con «Ejecutar como: yo» y «Quién tiene acceso: cualquier usuario». Copie la URL `/exec`.
+5. Ejecute una vez la función `probarCorreo` desde el editor para aceptar los permisos de Gmail.
+6. Guarde la URL y el secreto como secretos de Supabase (`APPS_SCRIPT_EMAIL_URL` y `APPS_SCRIPT_EMAIL_SECRET`). Nunca como variables `VITE_`.
+
+Cada vez que cambie el código del script debe crear una **nueva versión** de la implementación para que la URL sirva el código nuevo.
+
+Programe también este worker, igual que el de WhatsApp:
+
+```http
+POST https://TU_PROJECT_REF.supabase.co/functions/v1/process-email-outbox
+Content-Type: application/json
+x-outbox-secret: TU_SECRETO_ALEATORIO
+
+{"limit":10}
+```
+
+Si Gmail o Apps Script fallan, el pedido queda igualmente registrado: solo la fila de `notification_deliveries` con `channel='email'` queda en `retrying` o `failed`.
 
 ## 6. Crear el primer superadministrador
 

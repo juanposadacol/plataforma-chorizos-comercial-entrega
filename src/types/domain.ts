@@ -63,6 +63,8 @@ export interface OrderRequest {
   customer: {
     name: string;
     phone: string;
+    /** Opcional: si viene, el servidor encola el correo de confirmación. */
+    email?: string;
   };
   items: Array<{ product_id: UUID; quantity: number }>;
   delivery: {

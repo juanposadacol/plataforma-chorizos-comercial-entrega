@@ -200,14 +200,22 @@ Deno.serve(async (request) => {
     // Commit has already happened. Notification delivery is best-effort and cannot roll back the order.
     const workerSecret = Deno.env.get('OUTBOX_WORKER_SECRET');
     if (workerSecret) {
-      const delivery = fetch(`${url}/functions/v1/process-whatsapp-outbox`, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          'x-outbox-secret': workerSecret,
-        },
-        body: JSON.stringify({ limit: 5 }),
-      }).catch((error) => console.error('Outbox wake-up failed', error));
+      // Dos outbox independientes: WhatsApp al negocio y correo al comprador.
+      // Ninguno de los dos puede afectar al pedido, que ya está guardado, ni
+      // entre ellos: cada `catch` aísla su propio fallo.
+      const wake = (worker: string) =>
+        fetch(`${url}/functions/v1/${worker}`, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            'x-outbox-secret': workerSecret,
+          },
+          body: JSON.stringify({ limit: 5 }),
+        }).catch((error) => console.error(`${worker} wake-up failed`, error));
+      const delivery = Promise.allSettled([
+        wake('process-whatsapp-outbox'),
+        wake('process-email-outbox'),
+      ]);
       // Supported by Supabase Edge Runtime; graceful fallback for local Deno.
       // deno-lint-ignore no-explicit-any
       const runtime = (globalThis as any).EdgeRuntime;

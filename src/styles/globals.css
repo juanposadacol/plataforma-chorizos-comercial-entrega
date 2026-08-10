@@ -822,6 +822,17 @@ textarea[aria-invalid='true'] {
   font-size: 0.78rem;
   font-weight: 600;
 }
+.field-optional {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+.field-help {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
 .option-fieldset {
   margin: 24px 0 0;
   padding: 22px 0 0;

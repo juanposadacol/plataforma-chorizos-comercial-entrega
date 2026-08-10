@@ -11,7 +11,15 @@ import { DeliverySelector } from './DeliverySelector';
 import { PaymentMethodSelector } from './PaymentMethodSelector';
 
 /** Campos que se llenan solos cuando el celular corresponde a un cliente conocido. */
-const AUTOFILL_FIELDS = ['customerName', 'address', 'neighborhood', 'municipality'] as const;
+const AUTOFILL_FIELDS = [
+  'customerName',
+  'address',
+  'neighborhood',
+  'municipality',
+  // El servidor nunca devuelve el correo por celular; solo llega del perfil
+  // guardado en este mismo dispositivo, donde ya lo escribió su dueño.
+  'customerEmail',
+] as const;
 type AutofillField = (typeof AUTOFILL_FIELDS)[number];
 
 const isCompletePhone = (value: string): boolean =>
@@ -53,6 +61,7 @@ export function CheckoutForm({
     resolver: zodResolver(checkoutSchema),
     defaultValues: {
       customerName: '',
+      customerEmail: '',
       customerPhone: '',
       address: '',
       neighborhood: '',
@@ -96,6 +105,7 @@ export function CheckoutForm({
           address: profile.address,
           neighborhood: profile.neighborhood,
           municipality: profile.municipality,
+          customerEmail: profile.email ?? '',
         };
         let filled = 0;
         AUTOFILL_FIELDS.forEach((field) => {
@@ -167,6 +177,22 @@ export function CheckoutForm({
               placeholder="Ej. María Gómez"
             />
             {fieldError('customerName')}
+          </label>
+          <label className="full">
+            Correo electrónico <span className="field-optional">(opcional)</span>
+            <input
+              type="email"
+              inputMode="email"
+              autoComplete="email"
+              {...register('customerEmail')}
+              aria-invalid={Boolean(errors.customerEmail)}
+              aria-describedby={errors.customerEmail ? 'customerEmail-error' : 'customerEmail-help'}
+              placeholder="tucorreo@ejemplo.com"
+            />
+            <small id="customerEmail-help" className="field-help">
+              Te enviamos la confirmación del pedido a este correo.
+            </small>
+            {fieldError('customerEmail')}
           </label>
         </div>
         {autofillNotice && (

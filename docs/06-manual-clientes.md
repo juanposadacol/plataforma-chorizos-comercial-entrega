@@ -22,6 +22,8 @@ En la tienda no hay que registrarse ni iniciar sesión: el celular identifica al
    - observaciones opcionales.
 8. Pulse **Confirmar pedido seguro** una sola vez y espere la respuesta.
 
+El **correo electrónico es opcional**: si lo escribe, recibirá la confirmación del pedido con el detalle, el total y la dirección de entrega. Sin correo el pedido se registra igual.
+
 Si el celular no existe, la plataforma crea el cliente con la lista pública. El cliente nunca debe elegir una categoría o lista de precios.
 
 El total del resumen es estimado. Al confirmar, el servidor vuelve a consultar el producto, el cliente, el precio vigente, la tarifa de entrega y el inventario. Si algo cambió, se aplicará el valor autorizado por el servidor o se mostrará un error sin crear un pedido incompleto.
