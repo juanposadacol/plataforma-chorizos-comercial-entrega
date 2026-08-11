@@ -121,7 +121,7 @@ export interface AdminProduct extends AdminRecord {
   short_description?: string | null;
   category_id?: string | null;
   brand_id?: string | null;
-  image_url?: string | null;
+  /** Única columna de imagen de `products`; es la que lee la tienda. */
   main_image_url?: string | null;
   public_price: number;
   current_cost?: number;

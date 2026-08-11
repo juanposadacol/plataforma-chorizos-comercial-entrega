@@ -37,7 +37,15 @@ export function ProductTable() {
       step: 1,
       defaultValue: 5,
     },
-    { key: 'image_url', label: 'URL de imagen principal', type: 'text', fullWidth: true },
+    // `main_image_url` es la columna que lee la tienda. Antes este campo
+    // escribía en una `image_url` duplicada que el catálogo nunca consultaba.
+    {
+      key: 'main_image_url',
+      label: 'URL de imagen principal',
+      type: 'text',
+      fullWidth: true,
+      help: 'Ruta del proyecto (/assets/argentino.png) o URL completa. Es la foto que se ve en la tienda.',
+    },
     {
       key: 'status',
       label: 'Estado',
@@ -63,8 +71,12 @@ export function ProductTable() {
       header: 'Producto',
       render: (product) => (
         <div className="flex items-center gap-3">
-          {product.image_url ? (
-            <img src={product.image_url} alt="" className="h-11 w-11 rounded-xl object-cover" />
+          {product.main_image_url ? (
+            <img
+              src={product.main_image_url}
+              alt=""
+              className="h-11 w-11 rounded-xl object-cover"
+            />
           ) : (
             <span className="grid h-11 w-11 place-items-center rounded-xl bg-artisan-paper font-display text-lg font-bold text-wine">
               {product.name.slice(0, 1)}
