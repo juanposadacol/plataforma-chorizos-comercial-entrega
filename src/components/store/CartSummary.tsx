@@ -46,7 +46,13 @@ export function CartSummary({
         <div className="summary-lines" aria-live="polite">
           {rows.map(({ line, product }) => (
             <div className="summary-product" key={line.key}>
-              <img src={product.image_url} alt="" />
+              {product.image_url ? (
+                <img src={product.image_url} alt="" />
+              ) : (
+                <span className="summary-product-placeholder" aria-hidden="true">
+                  {product.name.slice(0, 1)}
+                </span>
+              )}
               <div>
                 <strong>{product.name}</strong>
                 <span>

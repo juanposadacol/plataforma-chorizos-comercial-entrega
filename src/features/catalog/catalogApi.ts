@@ -4,7 +4,7 @@ import { env, isSupabaseConfigured } from '../../lib/env';
 import { supabase } from '../../lib/supabase';
 import type { Product, PublicSettings, SelectOption } from '../../types/domain';
 
-const mapProduct = (row: Record<string, unknown>): Product => ({
+export const mapProduct = (row: Record<string, unknown>): Product => ({
   id: String(row.id),
   sku: String(row.sku ?? ''),
   slug: String(row.slug ?? row.id),
@@ -12,7 +12,10 @@ const mapProduct = (row: Record<string, unknown>): Product => ({
   short_description: String(row.short_description ?? ''),
   category_id: row.category_id ? String(row.category_id) : null,
   category_name: String(row.category_name ?? 'Chorizos artesanales'),
-  image_url: String(row.image_url ?? '/assets/santa-rosano.png'),
+  // Sin respaldo a una foto concreta: un producto sin imagen mostraba la del
+  // Santa Rosano y los tres terminaban con la misma. La tarjeta dibuja un
+  // marcador neutro cuando esto llega vacío.
+  image_url: String(row.image_url ?? ''),
   public_price: Number(row.public_price ?? 0),
   effective_price: Number(row.effective_price ?? row.public_price ?? 0),
   stock_available: Number(row.stock_available ?? 0),

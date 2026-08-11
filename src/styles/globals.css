@@ -407,6 +407,19 @@ a {
   object-position: 17% 54%;
   transform: scale(1.08);
 }
+/* Producto sin fotografía cargada. Ocupa el mismo hueco que la imagen para que
+   la tarjeta no cambie de tamaño. */
+.product-image-placeholder {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  background: var(--artisan-paper, #f4efe6);
+  color: var(--wine-dark);
+  font-family: var(--font-display, inherit);
+  font-size: 2.4rem;
+  font-weight: 800;
+}
 .featured-badge {
   position: absolute;
   top: 12px;
@@ -1037,6 +1050,16 @@ textarea[aria-invalid='true'] {
   border-radius: 10px;
   object-fit: cover;
   object-position: left;
+}
+.summary-product-placeholder {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--artisan-paper, #f4efe6);
+  color: var(--wine-dark);
+  font-weight: 800;
 }
 .summary-product div strong,
 .summary-product div span {

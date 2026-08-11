@@ -39,13 +39,21 @@ export function ProductCard({
   return (
     <article className="product-card">
       <div className="product-image-wrap">
-        <img
-          src={product.image_url}
-          alt={`Chorizo ${product.name}, ${presentation}`}
-          loading="lazy"
-          width="1254"
-          height="1254"
-        />
+        {product.image_url ? (
+          <img
+            src={product.image_url}
+            alt={`Chorizo ${product.name}, ${presentation}`}
+            loading="lazy"
+            width="1254"
+            height="1254"
+          />
+        ) : (
+          // Un producto sin fotografía no puede tomar prestada la de otro:
+          // ese respaldo era lo que hacía ver los tres chorizos iguales.
+          <span className="product-image-placeholder" role="img" aria-label={product.name}>
+            {product.name.slice(0, 1)}
+          </span>
+        )}
         {product.is_featured && (
           <span className="featured-badge">
             <BadgeCheck aria-hidden="true" /> Favorito
