@@ -68,6 +68,16 @@ La confirmación por correo no se envía desde React ni desde la transacción: `
 
 **Consecuencia:** un fallo de Gmail o de Apps Script nunca revierte una compra —solo deja el envío pendiente de reintento— y el correo no se duplica: `create_order` es idempotente, hay un índice único por notificación, la fila enviada no se vuelve a reclamar y Apps Script descarta un `deliveryId` repetido.
 
+### D-08c. El correo guardado se reutiliza en el servidor, no se publica
+
+`lookup_customer_for_order` seguirá sin devolver el correo del cliente: basta conocer un celular ajeno para llamarla. Solo informa `has_email` y una pista enmascarada por `mask_email` (`j••••@g••••.com`), que no revela ni la cuenta ni el dominio. La reutilización ocurre dentro de la transacción: si el checkout no manda correo, `create_order` toma el de `customers.email` (202608070014).
+
+`customers.email` es texto libre sin CHECK, así que tanto el correo escrito como el guardado pasan por `usable_email` antes de convertirse en destinatario; un valor como «no tiene» se descarta en silencio en vez de dejar una entrega imposible de completar.
+
+El correo completo sí puede precargarse desde el `localStorage` del dispositivo, porque ahí lo escribió su propio dueño. Antes esto no ocurría: `loadCustomerProfile` devolvía la primera fuente que respondiera y el servidor —que contesta a todo cliente registrado— dejaba sin leer la memoria del dispositivo. Ahora se combinan: el servidor manda en nombre y dirección, el dispositivo aporta el correo.
+
+**Consecuencia:** quien conozca un celular ajeno sigue sin poder leer ese correo, y el cliente que ya lo tiene registrado recibe su confirmación sin volver a escribirlo. Un pedido sin correo por ninguna vía se sigue creando igual.
+
 ### D-09. Roles más RLS
 
 React protege rutas y adapta la interfaz, pero PostgreSQL aplica el límite real por rol, propiedad y función. La service role queda confinada al servidor.
@@ -160,7 +170,7 @@ Los listados exportan CSV y el módulo de reportes agrega SpreadsheetML `.xls` y
 
 - `netlify.toml`, redirección SPA, CSP y otras cabeceras.
 - `.env.example` y plantilla de secretos para funciones.
-- Edge Functions `create-order`, `process-whatsapp-outbox` e `invite-staff`.
+- Edge Functions `create-order`, `process-whatsapp-outbox`, `process-email-outbox`, `whatsapp-webhook` e `invite-staff`.
 - Pruebas Vitest de las 20 invariantes comerciales solicitadas y pruebas SQL del backend.
 - ESLint, TypeScript, Prettier, build reproducible y documentación 01–09.
 
@@ -187,7 +197,7 @@ Estos puntos no son defectos que deban resolverse con valores inventados:
 No bloquean la arquitectura base, pero deben evaluarse según la operación:
 
 - **Devoluciones parciales:** la función actual procesa devolución total; un flujo por líneas requiere reglas de inventario, reembolso e impuestos.
-- **Estados de entrega de Meta:** se registra aceptación de la API, pero no hay webhook para `delivered` o `read`.
+- **Estados de entrega de Meta:** existe `whatsapp-webhook` como herramienta de diagnóstico, que registra `sent`, `delivered`, `read` y `failed` con su `errors.code`. Falta decidir si esos estados deben reflejarse en el panel: hoy solo van a los logs y, opcionalmente, a la bitácora de `supabase/diagnostics/whatsapp_status_events.sql`.
 - **Carga administrada de imágenes/soportes:** el modelo acepta rutas y URLs; una interfaz completa de carga, antivirus, límites y políticas de Storage debe definirse si el negocio la necesita.
 - **Facturación electrónica e impuestos:** no se integra un proveedor fiscal ni se afirma cumplimiento tributario.
 - **Pagos en línea:** se registran métodos y recaudos, pero no hay pasarela ni conciliación automática de un adquirente.

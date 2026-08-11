@@ -15,6 +15,14 @@ export interface CustomerProfile {
    * número. Aquí sirve para que el mismo comprador no lo reescriba.
    */
   email?: string;
+  /**
+   * El servidor sí puede decir que EXISTE un correo guardado, sin decir cuál.
+   * Sirve para explicarle al comprador que dejar el campo vacío no significa
+   * quedarse sin confirmación: `create_order` reutiliza el correo de su ficha.
+   */
+  hasSavedEmail?: boolean;
+  /** Pista enmascarada (`j••••@g••••.com`) del correo guardado en la ficha. */
+  emailHint?: string;
 }
 
 const clean = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
@@ -89,39 +97,64 @@ export const fetchSessionProfile = async (phone: string): Promise<CustomerProfil
  * Busca en el servidor el cliente dueño de ese celular. Solo devuelve nombre y
  * dirección de entrega: el resto de la ficha (documento, correo, saldo, cupo,
  * lista de precios) no sale del panel.
+ *
+ * Del correo devuelve únicamente si existe y una pista enmascarada. La dirección
+ * completa se queda en la base: basta conocer un celular ajeno para llamar aquí.
  */
 export const fetchPhoneLookup = async (phone: string): Promise<CustomerProfile | null> => {
   if (!supabase) return null;
   const { data, error } = await supabase.rpc('lookup_customer_for_order', { p_phone: phone });
   if (error || !data) return null;
-  const found = data as Partial<CustomerProfile>;
+  const found = data as Partial<CustomerProfile> & { has_email?: boolean; email_hint?: string };
   return {
     phone: clean(found.phone),
     name: clean(found.name),
     address: clean(found.address),
     neighborhood: clean(found.neighborhood),
     municipality: clean(found.municipality),
+    hasSavedEmail: found.has_email === true,
+    emailHint: clean(found.email_hint),
   };
 };
 
-/** El servidor manda; la memoria del dispositivo es el respaldo si no responde. */
+/**
+ * Combina lo que sabe el servidor con lo que recuerda este dispositivo.
+ *
+ * Antes esto devolvía la PRIMERA fuente que respondiera. Como el servidor
+ * contesta a todo cliente ya registrado, la memoria del dispositivo no se
+ * llegaba a leer nunca y el correo —el único campo que el servidor no
+ * devuelve— quedaba vacío justo cuando el resto se autocompletaba. De ahí que
+ * apareciera «Cargamos los datos guardados» con el correo en blanco.
+ *
+ * Ahora el servidor sigue mandando en lo que sí devuelve (nombre y dirección
+ * son el dato autoritativo) y el dispositivo aporta solo el correo, que ya
+ * escribió su dueño en este mismo navegador.
+ */
 export const loadCustomerProfile = async (
   phone: string,
   hasSession: boolean,
 ): Promise<CustomerProfile | null> => {
+  const local = readLocalProfile(phone);
+
+  let remote: CustomerProfile | null = null;
   try {
-    const profile = await fetchPhoneLookup(phone);
-    if (profile) return profile;
+    remote = await fetchPhoneLookup(phone);
   } catch {
     // Sin datos del servidor se sigue con lo guardado localmente.
   }
-  if (hasSession) {
+  if (!remote && hasSession) {
     try {
-      const profile = await fetchSessionProfile(phone);
-      if (profile) return profile;
+      remote = await fetchSessionProfile(phone);
     } catch {
       // Si la consulta falla se intenta con lo guardado localmente.
     }
   }
-  return readLocalProfile(phone);
+  if (!remote) return local;
+
+  return {
+    ...remote,
+    // El correo nunca viene del servidor; si este dispositivo lo recuerda, es
+    // el mismo comprador quien lo escribió aquí.
+    email: remote.email || local?.email || '',
+  };
 };

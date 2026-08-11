@@ -24,6 +24,8 @@ En la tienda no hay que registrarse ni iniciar sesión: el celular identifica al
 
 El **correo electrónico es opcional**: si lo escribe, recibirá la confirmación del pedido con el detalle, el total y la dirección de entrega. Sin correo el pedido se registra igual.
 
+Si el negocio ya tiene un correo suyo registrado, el formulario se lo indica con una pista enmascarada (por ejemplo `j••••@g••••.com`) y **la confirmación llega ahí aunque deje el campo vacío**. Escriba uno solo si quiere cambiarlo: el nuevo reemplaza al anterior. El correo completo nunca se muestra a quien solo escribe su número; si compró antes desde este mismo dispositivo, ahí sí aparece completo porque usted lo escribió en él.
+
 Si el celular no existe, la plataforma crea el cliente con la lista pública. El cliente nunca debe elegir una categoría o lista de precios.
 
 El total del resumen es estimado. Al confirmar, el servidor vuelve a consultar el producto, el cliente, el precio vigente, la tarifa de entrega y el inventario. Si algo cambió, se aplicará el valor autorizado por el servidor o se mostrará un error sin crear un pedido incompleto.
@@ -89,6 +91,10 @@ Sin conexión, la aplicación puede abrir la pantalla guardada en el dispositivo
 Todas esas acciones consultan el servidor y fallarán hasta que recupere la conexión. Espere a recuperarla y vuelva a intentar. No interprete una pantalla almacenada como confirmación comercial: lo que ve puede ser información antigua guardada en el dispositivo.
 
 ## 8. Errores frecuentes
+
+### “Este sitio no está autorizado para crear pedidos”
+
+La dirección desde la que está comprando no figura en la lista de dominios autorizados del servidor. Normalmente ocurre justo después de cambiar el nombre o el dominio del sitio. **No es un problema de su dispositivo ni de su pedido: no se creó ninguna compra.** Verifique que está usando el dominio oficial del negocio; si es el correcto, avise al administrador, que debe actualizar `ALLOWED_ORIGINS` en Supabase.
 
 ### “Falta conectar la tienda”
 

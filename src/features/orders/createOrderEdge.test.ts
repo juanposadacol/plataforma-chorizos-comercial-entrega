@@ -16,7 +16,14 @@ import {
 // mantienen libres de `Deno` justamente para poder ejercitarlos aquí; el
 // handler solo les inyecta el entorno y el verificador real.
 
-const PRODUCTION_ORIGIN = 'https://el-rey-del-chorizo.netlify.app';
+// Dominio real de producción. Si el sitio de Netlify se renombra, este valor y
+// el secreto `ALLOWED_ORIGINS` de Supabase tienen que cambiar JUNTOS: la
+// allowlist vive solo en el secreto, así que un dominio nuevo sin actualizarlo
+// devuelve 403 ORIGIN_NOT_ALLOWED («Este sitio no está autorizado para crear
+// pedidos») en cada checkout.
+const PRODUCTION_ORIGIN = 'https://chorizosgranjalasmarias.netlify.app';
+/** Nombre anterior del sitio. Ya no debe autorizarse. */
+const RETIRED_ORIGIN = 'https://el-rey-del-chorizo.netlify.app';
 const LOCAL_ORIGIN = 'http://localhost:5173';
 const ALLOWED = parseOriginList(`${PRODUCTION_ORIGIN},${LOCAL_ORIGIN}`);
 
@@ -51,10 +58,30 @@ describe('CORS — allowlist de orígenes', () => {
     expect(resolveAllowedOrigin('https://sitio-malicioso.example', ALLOWED)).toBe('null');
   });
 
+  // Reproduce el fallo reportado: renombrar el sitio en Netlify cambia el
+  // Origin que manda el navegador, y la allowlist seguía teniendo el anterior.
+  it('3b. el nombre anterior del sitio ya no está autorizado', () => {
+    expect(originIsAllowed(RETIRED_ORIGIN, ALLOWED)).toBe(false);
+    expect(resolveAllowedOrigin(RETIRED_ORIGIN, ALLOWED)).toBe('null');
+  });
+
+  it('3c. una allowlist que solo tiene el dominio viejo rechaza el actual', () => {
+    // Estado exacto del secreto ALLOWED_ORIGINS cuando apareció el error.
+    const desactualizada = parseOriginList(`${RETIRED_ORIGIN},${LOCAL_ORIGIN}`);
+    expect(originIsAllowed(PRODUCTION_ORIGIN, desactualizada)).toBe(false);
+    expect(resolveAllowedOrigin(PRODUCTION_ORIGIN, desactualizada)).toBe('null');
+    // Y el rechazo sigue siendo legible, que es como se pudo ver el código.
+    expect(resolveRejectionOrigin(PRODUCTION_ORIGIN)).toBe(PRODUCTION_ORIGIN);
+  });
+
   it('rechaza subdominios y esquemas que no coinciden exactamente', () => {
-    expect(originIsAllowed('http://el-rey-del-chorizo.netlify.app', ALLOWED)).toBe(false);
-    expect(originIsAllowed('https://evil.el-rey-del-chorizo.netlify.app', ALLOWED)).toBe(false);
-    expect(originIsAllowed('https://el-rey-del-chorizo.netlify.app.evil.com', ALLOWED)).toBe(false);
+    expect(originIsAllowed('http://chorizosgranjalasmarias.netlify.app', ALLOWED)).toBe(false);
+    expect(originIsAllowed('https://evil.chorizosgranjalasmarias.netlify.app', ALLOWED)).toBe(
+      false,
+    );
+    expect(originIsAllowed('https://chorizosgranjalasmarias.netlify.app.evil.com', ALLOWED)).toBe(
+      false,
+    );
   });
 
   it('normaliza barras finales al comparar y al configurar', () => {

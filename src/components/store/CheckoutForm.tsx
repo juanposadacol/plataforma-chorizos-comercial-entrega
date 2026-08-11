@@ -78,6 +78,10 @@ export function CheckoutForm({
 
   const phone = useWatch({ control, name: 'customerPhone' });
   const [autofillNotice, setAutofillNotice] = useState('');
+  // Pista del correo que el cliente ya tiene en su ficha. Solo se muestra
+  // cuando este dispositivo no lo recuerda: si lo recuerda, el campo ya quedó
+  // lleno con el correo completo y una pista enmascarada solo confundiría.
+  const [savedEmailHint, setSavedEmailHint] = useState('');
   // Recuerda qué escribió la autocarga para poder reemplazarlo si cambia el
   // celular, sin pisar nunca lo que el cliente haya escrito a mano.
   const autofilled = useRef<Partial<Record<AutofillField, string>>>({});
@@ -88,6 +92,7 @@ export function CheckoutForm({
     const timer = window.setTimeout(() => {
       if (!complete) {
         setAutofillNotice('');
+        setSavedEmailHint('');
         onPhoneIdentified?.(null);
         return;
       }
@@ -95,6 +100,7 @@ export function CheckoutForm({
         if (cancelled) return;
         if (!profile) {
           setAutofillNotice('');
+          setSavedEmailHint('');
           // Celular completo pero desconocido: el catálogo vuelve al precio público.
           onPhoneIdentified?.(null);
           return;
@@ -119,6 +125,13 @@ export function CheckoutForm({
         });
         if (filled)
           setAutofillNotice('Cargamos los datos guardados. Revísalos antes de confirmar.');
+        // El servidor nunca manda el correo completo, solo la pista. Si el
+        // campo quedó vacío pero la ficha del cliente sí tiene correo, hay que
+        // decirlo: el pedido llegará ahí aunque él no escriba nada.
+        const emailFieldIsEmpty = String(getValues('customerEmail') ?? '').trim() === '';
+        setSavedEmailHint(
+          profile.hasSavedEmail && emailFieldIsEmpty ? profile.emailHint || '•••' : '',
+        );
       });
     }, 400);
     return () => {
@@ -192,6 +205,12 @@ export function CheckoutForm({
             <small id="customerEmail-help" className="field-help">
               Te enviamos la confirmación del pedido a este correo.
             </small>
+            {savedEmailHint && (
+              <small className="field-help field-help--saved" role="status">
+                Ya tienes un correo guardado ({savedEmailHint}). Te enviamos ahí la confirmación;
+                escribe otro solo si quieres cambiarlo.
+              </small>
+            )}
             {fieldError('customerEmail')}
           </label>
         </div>

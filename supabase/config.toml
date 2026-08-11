@@ -36,3 +36,9 @@ verify_jwt = false
 
 [functions.invite-staff]
 verify_jwt = false
+
+# Webhook de estado de WhatsApp Cloud API. Meta no manda una sesión de Supabase,
+# así que no puede llevar JWT: la autenticidad se comprueba con la firma HMAC
+# del App Secret (x-hub-signature-256) dentro de la función.
+[functions.whatsapp-webhook]
+verify_jwt = false
