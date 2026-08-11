@@ -36,10 +36,13 @@ interface MethodRecord extends AdminRecord {
 }
 interface WhatsAppSetting extends AdminRecord {
   provider?: string;
-  admin_phone?: string;
+  administrator_phone?: string;
   business_phone?: string;
-  template_name?: string;
-  is_enabled?: boolean;
+  administrator_template_name?: string;
+  automatic_enabled?: boolean;
+  phone_number_id?: string;
+  access_token_secret_name?: string;
+
   status?: string;
 }
 type SettingsTab = 'business' | 'payments' | 'delivery' | 'whatsapp';
@@ -273,26 +276,13 @@ export function SettingsPage() {
         { value: 'manual', label: 'Respaldo manual' },
       ],
     },
-    { key: 'admin_phone', label: 'Celular del administrador', type: 'tel', required: true },
+    { key: 'administrator_phone', label: 'Celular del administrador', type: 'tel', required: true },
     { key: 'business_phone', label: 'Celular del negocio', type: 'tel' },
-    { key: 'template_name', label: 'Nombre de plantilla aprobada' },
+    { key: 'administrator_template_name', label: 'Nombre de plantilla aprobada' },
+    { key: 'phone_number_id', label: 'Phone Number ID de Meta', required: true },
+    { key: 'access_token_secret_name', label: 'Nombre del secreto del token', defaultValue: 'WHATSAPP_ACCESS_TOKEN', required: true },
     { key: 'template_language', label: 'Idioma de plantilla', defaultValue: 'es_CO' },
-    {
-      key: 'max_retries',
-      label: 'Cantidad de reintentos',
-      type: 'number',
-      min: 0,
-      step: 1,
-      defaultValue: 3,
-    },
-    { key: 'is_enabled', label: 'Envío automático activo', type: 'checkbox', defaultValue: false },
-    {
-      key: 'notes',
-      label: 'Notas de configuración',
-      type: 'textarea',
-      fullWidth: true,
-      help: 'Los tokens y secretos se configuran en Supabase; nunca se guardan aquí.',
-    },
+    { key: 'automatic_enabled', label: 'Envío automático activo', type: 'checkbox', defaultValue: false },
   ];
   const whatsappColumns: TableColumn<WhatsAppSetting>[] = [
     {
@@ -300,15 +290,15 @@ export function SettingsPage() {
       header: 'Proveedor',
       render: (setting) => setting.provider?.replaceAll('_', ' ') || 'Manual',
     },
-    { key: 'phone', header: 'Administrador', render: (setting) => setting.admin_phone || '—' },
-    { key: 'template', header: 'Plantilla', render: (setting) => setting.template_name || '—' },
+    { key: 'phone', header: 'Administrador', render: (setting) => setting.administrator_phone || '—' },
+    { key: 'template', header: 'Plantilla', render: (setting) => setting.administrator_template_name || '—' },
     {
       key: 'status',
       header: 'Estado',
       render: (setting) => (
         <StatusBadge
-          status={setting.is_enabled ? 'active' : 'inactive'}
-          label={setting.is_enabled ? 'Automático' : 'Respaldo manual'}
+          status={setting.automatic_enabled ? 'active' : 'inactive'}
+          label={setting.automatic_enabled ? 'Automático' : 'Respaldo manual'}
         />
       ),
     },
